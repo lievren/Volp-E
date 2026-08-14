@@ -486,3 +486,4 @@ Le but n'est pas de fabriquer immédiatement le robot parfait. Le but est de con
 ## Licence
 
 Ce projet est actuellement distribué sous licence MIT.
+Volp-E Adventures, l’univers narratif, les personnages, logos et éléments de jeu ne sont pas couverts par la licence MIT du code
