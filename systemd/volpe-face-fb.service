@@ -1,0 +1,13 @@
+[Unit]
+Description=Volp-E framebuffer face
+After=volpe-brain.service
+Wants=volpe-brain.service
+
+[Service]
+Type=simple
+ExecStart=/opt/volp-e/bin/start-face-fb.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

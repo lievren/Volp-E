@@ -1,0 +1,75 @@
+{
+  "_guide": {
+    "face_close": "Objectif: 20 phrases. Quand quelqu'un est tres proche de Volp-E.",
+    "face_medium": "Objectif: 20 phrases. Quand quelqu'un est devant lui a distance normale.",
+    "face_far": "Objectif: 15 phrases. Quand il detecte une presence plus loin.",
+    "no_presence": "Objectif: 15 phrases. Scene calme, personne detectee.",
+    "presence_returned": "Objectif: 10 phrases. Quand une presence revient apres une absence courte.",
+    "presence_continues": "Objectif: 10 phrases. Quand Volp-E suit deja quelqu'un depuis quelques secondes.",
+    "presence_lost": "Objectif: 10 phrases. Quand la presence sort du champ.",
+    "mood_happy": "Objectif: 10 phrases. Quand Volp-E reconnait une presence familiere ou se sent content.",
+    "mood_sleepy": "Objectif: 10 phrases. Quand son energie baisse ou qu'il devient calme.",
+    "mood_curious": "Objectif: 10 phrases. Quand sa curiosite monte.",
+    "description_face": "Objectif: 10 phrases techniques/interieures. Garder {distance_text}, {horizontal}, {vertical}."
+  },
+  "face_close": [
+    "Je te vois tout pres de moi.",
+    "Tu es vraiment proche.",
+    "Presence proche. Je reste attentif.",
+    "Salut toi. Tu es dans ma zone proche."
+  ],
+  "face_medium": [
+    "Je te vois devant moi.",
+    "Je t'ai repere.",
+    "Quelqu'un est face a moi.",
+    "Presence detectee. Je regarde dans ta direction."
+  ],
+  "face_far": [
+    "Je crois voir quelqu'un au loin.",
+    "Je distingue une presence plus loin.",
+    "Mouvement lointain detecte.",
+    "Je garde un oeil sur cette presence."
+  ],
+  "no_presence": [
+    "Aucune presence detectee dans la derniere image exploitable.",
+    "Scene calme. Je surveille doucement.",
+    "Pas de visage confirme pour l'instant.",
+    "Je reste en observation."
+  ],
+  "presence_returned": [
+    "Ah, te revoila.",
+    "Je te retrouve dans mon champ de vision.",
+    "Presence revenue. Je reprends le suivi."
+  ],
+  "presence_continues": [
+    "Je garde le contact visuel.",
+    "Je continue de te suivre.",
+    "Presence stable. Mon attention reste active."
+  ],
+  "presence_lost": [
+    "Je t'ai perdu de vue.",
+    "Presence sortie du champ. Je reste attentif.",
+    "Je ne te vois plus, mais je surveille."
+  ],
+  "mood_happy": [
+    "Content de te revoir.",
+    "Je reconnais ce rythme. Tu reviens souvent.",
+    "Presence familiere. Mon attention se stabilise."
+  ],
+  "mood_sleepy": [
+    "Je baisse un peu mon attention.",
+    "Mode calme. Je reste en veille legere.",
+    "Je ralentis doucement, mais je reste la."
+  ],
+  "mood_curious": [
+    "Quelque chose attire mon attention.",
+    "Je suis curieux de ce qui se passe devant moi.",
+    "J'observe. Il y a quelque chose d'interessant ici."
+  ],
+  "description_face": [
+    "Presence detectee {distance_text}. Position: {horizontal}/{vertical}.",
+    "Analyse scene: personne {distance_text}, zone {horizontal}/{vertical}.",
+    "Attention dirigee vers une presence {distance_text}, secteur {horizontal}/{vertical}.",
+    "Suivi visuel actif: cible {distance_text}, position {horizontal}/{vertical}."
+  ]
+}

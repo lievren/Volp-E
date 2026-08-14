@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime/debug captures
+desktop-brain/latest_scene.jpg
+desktop-brain/latest_scene.json
+*.log
+*.tmp
+
+# Local models and generated packages
+models/*.tflite
+*.tar.gz
+*.zip
+
+# Local machine config
+.env
+config.local
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

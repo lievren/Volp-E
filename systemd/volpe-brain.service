@@ -1,0 +1,15 @@
+[Unit]
+Description=Volp-E brain server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/volp-e
+EnvironmentFile=-/etc/default/volp-e
+ExecStart=/usr/bin/python3 /opt/volp-e/brain/volpe_brain.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

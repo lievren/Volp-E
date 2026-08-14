@@ -1,0 +1,17 @@
+[Unit]
+Description=Volp-E lightweight face detection
+After=volpe-brain.service
+Wants=volpe-brain.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/volp-e
+ExecStartPre=/bin/sleep 8
+ExecStart=/opt/volp-e/bin/start-vision.sh
+Restart=always
+RestartSec=4
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
