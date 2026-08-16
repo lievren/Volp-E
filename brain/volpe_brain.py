@@ -3,6 +3,9 @@ import base64
 import json
 import mimetypes
 import os
+import re
+import subprocess
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,14 +15,115 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 FACE_DIR = ROOT / "face"
-STANDBY_AFTER_SECONDS = 300
+PERSONALITY_FILE = Path(os.environ.get("VOLPE_PERSONALITY_FILE", ROOT / "config" / "personality.json"))
+
+
+DEFAULT_PERSONALITY = {
+    "name": "Volp-E",
+    "pronunciation": "Volpi",
+    "profile": "curious_companion",
+    "description": "Petit compagnon attentif, curieux et expressif.",
+    "tone": {
+        "energy_baseline": 0.55,
+    },
+    "speech": {
+        "enabled": True,
+        "min_interval_seconds": 4.0,
+        "think_cooldown_seconds": 12.0,
+    },
+    "memory": {
+        "max_events": 24,
+        "recent_seconds": 600,
+        "standby_after_seconds": 300,
+        "close_face_size": 0.70,
+        "presence_energy_gain": 0.10,
+        "presence_curiosity_gain": 0.12,
+        "presence_familiarity_gain": 0.04,
+        "presence_lost_curiosity_gain": 0.06,
+        "presence_close_energy_gain": 0.06,
+        "presence_close_familiarity_gain": 0.03,
+        "standby_energy_loss": 0.08,
+        "analysis_curiosity_gain": 0.03,
+        "face_energy_gain_per_second": 0.055,
+        "face_curiosity_gain_per_second": 0.040,
+        "face_familiarity_gain_per_second": 0.010,
+        "standby_energy_loss_per_second": 0.030,
+        "standby_curiosity_loss_per_second": 0.025,
+        "searching_energy_gain_per_second": 0.010,
+        "searching_curiosity_gain_per_second": 0.012,
+        "ambient_energy_loss_per_second": 0.018,
+        "ambient_curiosity_loss_per_second": 0.016,
+    },
+    "attention": {
+        "face_close_size": 0.72,
+        "face_medium_size": 0.38,
+        "position_deadzone": 0.28,
+    },
+    "expressions": {},
+}
+
+
+def deep_merge(default, override):
+    merged = dict(default)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_personality():
+    try:
+        with PERSONALITY_FILE.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except Exception as exc:
+        print(f"[Volp-E personality] using defaults: {exc}", flush=True)
+        return DEFAULT_PERSONALITY
+    return deep_merge(DEFAULT_PERSONALITY, loaded)
+
+
+def personality_float(section, key, default):
+    try:
+        return float(PERSONALITY.get(section, {}).get(key, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def personality_int(section, key, default):
+    return int(personality_float(section, key, default))
+
+
+PERSONALITY = load_personality()
+STANDBY_AFTER_SECONDS = personality_float("memory", "standby_after_seconds", 300)
 EXTERNAL_BRAIN_URL = os.environ.get("VOLPE_EXTERNAL_BRAIN_URL", "").rstrip("/")
 EXTERNAL_CHECK_INTERVAL = 10
 EXTERNAL_TIMEOUT = 1.5
-THINK_COOLDOWN_SECONDS = 12
-MEMORY_MAX_EVENTS = 24
-MEMORY_RECENT_SECONDS = 600
-MEMORY_CLOSE_FACE_SIZE = 0.70
+EXTERNAL_TTS_TIMEOUT = 6.0
+THINK_COOLDOWN_SECONDS = personality_float("speech", "think_cooldown_seconds", 12)
+SPEECH_MIN_INTERVAL_SECONDS = personality_float("speech", "min_interval_seconds", 4)
+SPEECH_WAV_PATH = Path("/tmp/volpe-speech.wav")
+APLAY_DEVICE = os.environ.get("VOLPE_APLAY_DEVICE", "").strip()
+MEMORY_MAX_EVENTS = personality_int("memory", "max_events", 24)
+MEMORY_RECENT_SECONDS = personality_float("memory", "recent_seconds", 600)
+MEMORY_CLOSE_FACE_SIZE = personality_float("memory", "close_face_size", 0.70)
+MEMORY_PRESENCE_ENERGY_GAIN = personality_float("memory", "presence_energy_gain", 0.10)
+MEMORY_PRESENCE_CURIOSITY_GAIN = personality_float("memory", "presence_curiosity_gain", 0.12)
+MEMORY_PRESENCE_FAMILIARITY_GAIN = personality_float("memory", "presence_familiarity_gain", 0.04)
+MEMORY_LOST_CURIOSITY_GAIN = personality_float("memory", "presence_lost_curiosity_gain", 0.06)
+MEMORY_CLOSE_ENERGY_GAIN = personality_float("memory", "presence_close_energy_gain", 0.06)
+MEMORY_CLOSE_FAMILIARITY_GAIN = personality_float("memory", "presence_close_familiarity_gain", 0.03)
+MEMORY_STANDBY_ENERGY_LOSS = personality_float("memory", "standby_energy_loss", 0.08)
+MEMORY_ANALYSIS_CURIOSITY_GAIN = personality_float("memory", "analysis_curiosity_gain", 0.03)
+MEMORY_FACE_ENERGY_GAIN = personality_float("memory", "face_energy_gain_per_second", 0.055)
+MEMORY_FACE_CURIOSITY_GAIN = personality_float("memory", "face_curiosity_gain_per_second", 0.040)
+MEMORY_FACE_FAMILIARITY_GAIN = personality_float("memory", "face_familiarity_gain_per_second", 0.010)
+MEMORY_STANDBY_ENERGY_LOSS_PER_SECOND = personality_float("memory", "standby_energy_loss_per_second", 0.030)
+MEMORY_STANDBY_CURIOSITY_LOSS_PER_SECOND = personality_float("memory", "standby_curiosity_loss_per_second", 0.025)
+MEMORY_SEARCHING_ENERGY_GAIN = personality_float("memory", "searching_energy_gain_per_second", 0.010)
+MEMORY_SEARCHING_CURIOSITY_GAIN = personality_float("memory", "searching_curiosity_gain_per_second", 0.012)
+MEMORY_AMBIENT_ENERGY_LOSS = personality_float("memory", "ambient_energy_loss_per_second", 0.018)
+MEMORY_AMBIENT_CURIOSITY_LOSS = personality_float("memory", "ambient_curiosity_loss_per_second", 0.016)
 PERSONALITY_TICK_MIN_SECONDS = 0.25
 FRAME_SIZE = (320, 240)
 ROTATE_180 = True
@@ -40,6 +144,16 @@ STATE = {
     },
     "standby_after": STANDBY_AFTER_SECONDS,
     "no_presence_since": STARTED_AT,
+    "personality": {
+        "name": PERSONALITY.get("name", "Volp-E"),
+        "pronunciation": PERSONALITY.get("pronunciation", "Volpi"),
+        "profile": PERSONALITY.get("profile", "curious_companion"),
+        "description": PERSONALITY.get("description", ""),
+        "config_path": str(PERSONALITY_FILE),
+        "tone": PERSONALITY.get("tone", {}),
+        "speech": PERSONALITY.get("speech", {}),
+        "expressions": PERSONALITY.get("expressions", {}),
+    },
     "external_brain": {
         "configured": bool(EXTERNAL_BRAIN_URL),
         "url": EXTERNAL_BRAIN_URL,
@@ -57,6 +171,19 @@ STATE = {
         "speech": "",
         "attention": None,
         "actions": [],
+    },
+    "voice": {
+        "enabled": os.environ.get("VOLPE_VOICE_ENABLED", "1") != "0" and bool(PERSONALITY.get("speech", {}).get("enabled", True)),
+        "status": "idle",
+        "last_at": 0.0,
+        "last_text": "",
+        "last_engine": "",
+        "last_desktop_engine": "",
+        "last_audio_path": "",
+        "last_audio_bytes": 0,
+        "last_command": "",
+        "last_result": "",
+        "last_error": "",
     },
     "memory": {
         "mood": "waking",
@@ -111,6 +238,10 @@ class VolpeHandler(BaseHTTPRequestHandler):
             self.send_json(STATE)
             return
 
+        if parsed.path == "/api/personality":
+            self.send_json({"ok": True, "personality": PERSONALITY})
+            return
+
         if parsed.path == "/api/external/check":
             self.update_external_brain_status(force=True)
             self.send_json({"ok": True, "external_brain": STATE["external_brain"]})
@@ -120,6 +251,36 @@ class VolpeHandler(BaseHTTPRequestHandler):
             self.update_external_brain_status(force=True)
             result = self.analyze_scene()
             self.send_json(result, 200 if result.get("ok") else 503)
+            return
+
+        if parsed.path == "/api/say":
+            query = parse_qs(parsed.query)
+            text = query.get("text", [""])[0]
+            if not text:
+                self.send_json({"ok": False, "error": "missing text"}, 400)
+                return
+            force = query.get("force", ["0"])[0] == "1"
+            sync = query.get("sync", ["0"])[0] == "1"
+            if sync:
+                spoken_text = self.prepare_speech_text(text)
+                if not spoken_text:
+                    self.send_json({"ok": False, "error": "empty prepared text"}, 400)
+                    return
+                STATE["voice"]["last_at"] = time.time()
+                STATE["voice"]["last_text"] = spoken_text
+                self.speak_text(spoken_text)
+            else:
+                self.maybe_speak(text, force=force)
+            self.send_json({"ok": True, "voice": STATE["voice"]})
+            return
+
+        if parsed.path == "/api/voice/test":
+            text = parse_qs(parsed.query).get("text", ["Test vocal Volp-E"])[0]
+            spoken_text = self.prepare_speech_text(text)
+            STATE["voice"]["last_at"] = time.time()
+            STATE["voice"]["last_text"] = spoken_text
+            self.speak_text(spoken_text)
+            self.send_json({"ok": STATE["voice"].get("status") != "error", "voice": STATE["voice"]})
             return
 
         if parsed.path == "/api/mode":
@@ -203,21 +364,21 @@ class VolpeHandler(BaseHTTPRequestHandler):
         if kind == "presence_arrived":
             memory["presence_count"] += 1
             memory["last_presence_at"] = now
-            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) + 0.10)
-            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + 0.12)
-            memory["familiarity"] = cls.clamp01(float(memory.get("familiarity") or 0.0) + 0.04)
+            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) + MEMORY_PRESENCE_ENERGY_GAIN)
+            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + MEMORY_PRESENCE_CURIOSITY_GAIN)
+            memory["familiarity"] = cls.clamp01(float(memory.get("familiarity") or 0.0) + MEMORY_PRESENCE_FAMILIARITY_GAIN)
         elif kind == "presence_lost":
             memory["last_presence_lost_at"] = now
-            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + 0.06)
+            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + MEMORY_LOST_CURIOSITY_GAIN)
         elif kind == "presence_close":
             memory["last_close_presence_at"] = now
-            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) + 0.06)
-            memory["familiarity"] = cls.clamp01(float(memory.get("familiarity") or 0.0) + 0.03)
+            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) + MEMORY_CLOSE_ENERGY_GAIN)
+            memory["familiarity"] = cls.clamp01(float(memory.get("familiarity") or 0.0) + MEMORY_CLOSE_FAMILIARITY_GAIN)
         elif kind == "standby_entered":
             memory["last_standby_at"] = now
-            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) - 0.08)
+            memory["energy"] = cls.clamp01(float(memory.get("energy") or 0.0) - MEMORY_STANDBY_ENERGY_LOSS)
         elif kind == "analysis_received":
-            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + 0.03)
+            memory["curiosity"] = cls.clamp01(float(memory.get("curiosity") or 0.0) + MEMORY_ANALYSIS_CURIOSITY_GAIN)
 
         cls.update_memory_mood(now)
 
@@ -240,21 +401,21 @@ class VolpeHandler(BaseHTTPRequestHandler):
         size = float(STATE["vision"].get("size") or 0.0)
 
         if face:
-            energy += 0.055 * dt
-            curiosity += (0.040 + size * 0.025) * dt
-            familiarity += 0.010 * dt
+            energy += MEMORY_FACE_ENERGY_GAIN * dt
+            curiosity += (MEMORY_FACE_CURIOSITY_GAIN + size * 0.025) * dt
+            familiarity += MEMORY_FACE_FAMILIARITY_GAIN * dt
             attention = "person_close" if size >= MEMORY_CLOSE_FACE_SIZE else "person"
         elif STATE["mode"] == "standby" or idle_for >= STANDBY_AFTER_SECONDS:
-            energy -= 0.030 * dt
-            curiosity -= 0.025 * dt
+            energy -= MEMORY_STANDBY_ENERGY_LOSS_PER_SECOND * dt
+            curiosity -= MEMORY_STANDBY_CURIOSITY_LOSS_PER_SECOND * dt
             attention = "dream"
         elif last_lost and now - last_lost < 45:
-            energy += 0.010 * dt
-            curiosity += 0.012 * dt
+            energy += MEMORY_SEARCHING_ENERGY_GAIN * dt
+            curiosity += MEMORY_SEARCHING_CURIOSITY_GAIN * dt
             attention = "searching"
         else:
-            energy -= 0.018 * dt
-            curiosity -= 0.016 * dt
+            energy -= MEMORY_AMBIENT_ENERGY_LOSS * dt
+            curiosity -= MEMORY_AMBIENT_CURIOSITY_LOSS * dt
             attention = "ambient"
 
         energy = cls.clamp01(energy)
@@ -303,6 +464,12 @@ class VolpeHandler(BaseHTTPRequestHandler):
         if not EXTERNAL_BRAIN_URL:
             return ""
         return f"{EXTERNAL_BRAIN_URL}/analyze"
+
+    @staticmethod
+    def external_speak_url():
+        if not EXTERNAL_BRAIN_URL:
+            return ""
+        return f"{EXTERNAL_BRAIN_URL}/speak"
 
     @classmethod
     def update_external_brain_status(cls, force=False):
@@ -375,6 +542,7 @@ class VolpeHandler(BaseHTTPRequestHandler):
             "vision_age": vision_age,
             "face_recent": face_recent,
             "memory": dict(STATE["memory"]),
+            "personality": dict(STATE["personality"]),
             "snapshot_at": now,
         }
 
@@ -393,6 +561,7 @@ class VolpeHandler(BaseHTTPRequestHandler):
             mood=thought["mood"],
             suggested_mode=result.get("suggested_mode", ""),
         )
+        VolpeHandler.maybe_speak(thought["speech"] or thought["description"])
 
         suggested_mode = result.get("suggested_mode")
         if suggested_mode in {"normal", "sleepy", "alert", "standby"}:
@@ -408,6 +577,121 @@ class VolpeHandler(BaseHTTPRequestHandler):
             if suggested_mode != "standby":
                 STATE["no_presence_since"] = time.time()
             STATE["mode"] = suggested_mode
+
+    @classmethod
+    def maybe_speak(cls, text, force=False):
+        voice = STATE["voice"]
+        if not voice.get("enabled"):
+            return
+        spoken_text = cls.prepare_speech_text(text)
+        if not spoken_text:
+            return
+        now = time.time()
+        if not force and spoken_text == voice.get("last_text") and now - float(voice.get("last_at") or 0.0) < 30:
+            return
+        if not force and now - float(voice.get("last_at") or 0.0) < SPEECH_MIN_INTERVAL_SECONDS:
+            return
+        voice["last_at"] = now
+        voice["last_text"] = spoken_text
+        voice["status"] = "queued"
+        try:
+            threading.Thread(target=cls.speak_text, args=(spoken_text,), daemon=True).start()
+        except Exception as exc:
+            voice["status"] = "error"
+            voice["last_error"] = str(exc)
+
+    @staticmethod
+    def prepare_speech_text(text):
+        text = " ".join(str(text or "").split())
+        if not text:
+            return ""
+        # Pronunciation only: keep displayed text as Volp-E, but say "Volpi".
+        pronunciation = str(PERSONALITY.get("pronunciation") or "Volpi").strip() or "Volpi"
+        text = re.sub(r"\bvolp\s*[- ]?\s*e\b", pronunciation, text, flags=re.IGNORECASE)
+        return text
+
+    @classmethod
+    def speak_text(cls, text):
+        voice = STATE["voice"]
+        voice["status"] = "speaking"
+        voice["last_error"] = ""
+        voice["last_result"] = ""
+        print(f"[Volp-E voice] speaking request: {text}", flush=True)
+        if EXTERNAL_BRAIN_URL:
+            try:
+                print(f"[Volp-E voice] requesting desktop voice: {cls.external_speak_url()}", flush=True)
+                audio, desktop_engine = cls.request_external_speech(text)
+                if audio:
+                    SPEECH_WAV_PATH.write_bytes(audio)
+                    print(f"[Volp-E voice] desktop audio received: engine={desktop_engine}, bytes={len(audio)}, file={SPEECH_WAV_PATH}", flush=True)
+                    cls.play_wav(SPEECH_WAV_PATH)
+                    voice["last_engine"] = "desktop"
+                    voice["last_desktop_engine"] = desktop_engine
+                    voice["last_audio_path"] = str(SPEECH_WAV_PATH)
+                    voice["last_audio_bytes"] = len(audio)
+                    voice["status"] = "idle"
+                    return
+            except Exception as exc:
+                voice["last_error"] = f"desktop voice failed: {exc}"
+                print(f"[Volp-E voice] {voice['last_error']}", flush=True)
+        try:
+            print("[Volp-E voice] falling back to espeak-ng", flush=True)
+            cls.speak_espeak(text)
+            voice["last_engine"] = "espeak-ng"
+            voice["last_desktop_engine"] = ""
+            voice["last_audio_path"] = ""
+            voice["last_audio_bytes"] = 0
+            voice["status"] = "idle"
+        except Exception as exc:
+            voice["status"] = "error"
+            voice["last_error"] = str(exc)
+
+    @classmethod
+    def request_external_speech(cls, text):
+        payload = {"text": text, "voice": "fr"}
+        request = Request(
+            cls.external_speak_url(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=EXTERNAL_TTS_TIMEOUT) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        if not result.get("ok"):
+            raise RuntimeError(result.get("error", "external speech returned ok=false"))
+        audio_b64 = result.get("audio_b64", "")
+        if not audio_b64:
+            raise RuntimeError("external speech returned no audio")
+        engine = str(result.get("engine", "desktop"))
+        return base64.b64decode(audio_b64, validate=True), engine
+
+    @staticmethod
+    def play_wav(path):
+        command = ["aplay"]
+        if APLAY_DEVICE:
+            command.extend(["-D", APLAY_DEVICE])
+        command.append(str(path))
+        STATE["voice"]["last_command"] = " ".join(command)
+        print(f"[Volp-E voice] playing wav: {STATE['voice']['last_command']}", flush=True)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "aplay failed").strip()
+            raise RuntimeError(f"{' '.join(command)} failed: {detail}")
+        STATE["voice"]["last_result"] = (result.stderr or result.stdout or "aplay ok").strip()
+        if result.stderr.strip():
+            print(f"[Volp-E voice] {' '.join(command)}: {result.stderr.strip()}", flush=True)
+        else:
+            print(f"[Volp-E voice] {' '.join(command)}: ok", flush=True)
+
+    @staticmethod
+    def speak_espeak(text):
+        command = ["espeak-ng", "-v", "fr", text]
+        STATE["voice"]["last_command"] = " ".join(command)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=12)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "espeak-ng failed").strip()
+            raise RuntimeError(f"espeak-ng failed: {detail}")
+        STATE["voice"]["last_result"] = (result.stderr or result.stdout or "espeak-ng ok").strip()
 
     @staticmethod
     def capture_frame():

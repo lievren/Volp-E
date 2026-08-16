@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_USER="${VOLPE_USER:-pi}"
+APP_USER="${VOLPE_USER:-renaud}"
 VENV_PYTHON="/home/${APP_USER}/volpe-ai/bin/python"
 
 export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"

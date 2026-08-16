@@ -5,6 +5,7 @@ import os
 import random
 import struct
 import time
+from pathlib import Path
 from urllib.request import urlopen
 
 
@@ -16,6 +17,23 @@ ROTATE_180 = True
 STATE_POLL_INTERVAL = 0.11
 STATE_TIMEOUT = 0.035
 THOUGHT_VISIBLE_SECONDS = 45
+RAW_EYE_DIRS = {
+    16: Path(__file__).resolve().parent / "assets" / "eyes-rgb565",
+    24: Path(__file__).resolve().parent / "assets" / "eyes-bgr24",
+    32: Path(__file__).resolve().parent / "assets" / "eyes-bgrx32",
+}
+EYE_FRAME_NAMES = {
+    "center": "yeux_BASE.raw",
+    "closed": "yeux_FERME.raw",
+    "left1": "yeux_GAUCHE1.raw",
+    "left2": "yeux_GAUCHE2.raw",
+    "right1": "yeux_DROITE1.raw",
+    "right2": "yeux_DROITE2.raw",
+    "up_left": "regard_haut_gauche.raw",
+    "up_right": "regard_haut_droit.raw",
+    "down_left": "regard_bas_gauche.raw",
+    "down_right": "regard_bas_droite.raw",
+}
 
 FONT = {
     " ": ["000", "000", "000", "000", "000", "000", "000"],
@@ -115,6 +133,20 @@ class Canvas:
         for y in range(self.height):
             start = y * self.stride
             self.buffer[start:start + self.stride] = row[:self.stride]
+
+    def blit_raw_frame(self, frame):
+        expected = self.width * self.height * self.bytes_per_pixel
+        if len(frame) != expected:
+            return False
+        row_bytes = self.width * self.bytes_per_pixel
+        if self.stride == row_bytes:
+            self.buffer[:expected] = frame
+            return True
+        for y in range(self.height):
+            src = y * row_bytes
+            dst = y * self.stride
+            self.buffer[dst:dst + row_bytes] = frame[src:src + row_bytes]
+        return True
 
     def put(self, x, y, color):
         if x < 0 or y < 0 or x >= self.width or y >= self.height:
@@ -339,9 +371,52 @@ def draw_thought(canvas, state):
         draw_text(canvas, line, x, y, (214, 244, 255), scale)
 
 
+def load_eye_frames(width, height, bpp):
+    root = RAW_EYE_DIRS.get(bpp)
+    if root is None:
+        print(f"[Volp-E fb] PNG eye frames disabled: unsupported {bpp}bpp framebuffer", flush=True)
+        return {}
+    frame_dir = root / f"{width}x{height}"
+    frames = {}
+    for key, name in EYE_FRAME_NAMES.items():
+        path = frame_dir / name
+        try:
+            frames[key] = path.read_bytes()
+        except OSError:
+            pass
+    if "center" not in frames or "closed" not in frames:
+        print(f"[Volp-E fb] missing PNG eye frames in {frame_dir}", flush=True)
+        return {}
+    print(f"[Volp-E fb] loaded {len(frames)} PNG eye frames from {frame_dir}", flush=True)
+    return frames
+
+
+def choose_eye_frame(frames, mode, look_x, look_y, blink_closed):
+    if not frames:
+        return None
+    if blink_closed:
+        return frames.get("closed")
+    if mode == "sleepy":
+        return frames.get("closed")
+    if look_y < -0.45:
+        return frames.get("up_left" if look_x < -0.12 else "up_right")
+    if look_y > 0.45:
+        return frames.get("down_left" if look_x < -0.12 else "down_right")
+    if look_x < -0.58:
+        return frames.get("left2")
+    if look_x < -0.22:
+        return frames.get("left1")
+    if look_x > 0.58:
+        return frames.get("right2")
+    if look_x > 0.22:
+        return frames.get("right1")
+    return frames.get("center")
+
+
 def main():
     width, height, bpp, stride = framebuffer_info()
     canvas = Canvas(width, height, bpp, stride)
+    eye_frames = load_eye_frames(width, height, bpp)
     last_state = {"mode": "normal", "vision": {"face": False, "x": 0.0, "y": 0.0}}
     target_x = 0.0
     target_y = 0.0
@@ -349,6 +424,8 @@ def main():
     look_y = 0.0
     next_random = 0.0
     next_state_poll = 0.0
+    next_blink = time.time() + random.uniform(2.8, 6.5)
+    blink_until = 0.0
     print(f"[Volp-E fb] framebuffer {width}x{height} {bpp}bpp stride={stride}", flush=True)
 
     with open(FB_PATH, "r+b", buffering=0) as fb:
@@ -377,20 +454,27 @@ def main():
             look_x += (target_x - look_x) * ease
             look_y += (target_y - look_y) * ease
 
+            if mode != "standby" and now >= next_blink:
+                blink_until = now + random.uniform(0.10, 0.16)
+                next_blink = now + random.uniform(3.0, 7.5)
+            blink_closed = now < blink_until
+
             canvas.clear()
             if mode == "standby":
                 draw_standby(canvas, now)
             else:
-                wobble_x = math.sin(now * (43 if mode == "alert" else 0.9)) * (3 if mode == "alert" else 0.6)
-                wobble_y = math.cos(now * (39 if mode == "alert" else 0.75)) * (2 if mode == "alert" else 0.4)
-                scale = min(width / 800, height / 480)
-                center_y = height * 0.47 + wobble_y
-                left_cx = width * 0.30 + wobble_x
-                right_cx = width * 0.70 + wobble_x
-                sleepy = mode == "sleepy"
-                alert = mode == "alert"
-                draw_eye(canvas, left_cx, center_y + 2 * scale, 84 * scale, 156 * scale, look_x, look_y, False, sleepy, alert)
-                draw_eye(canvas, right_cx, center_y - 6 * scale, 90 * scale, 164 * scale, look_x, look_y, True, sleepy, alert)
+                frame = choose_eye_frame(eye_frames, mode, look_x, look_y, blink_closed)
+                if not frame or not canvas.blit_raw_frame(frame):
+                    wobble_x = math.sin(now * (43 if mode == "alert" else 0.9)) * (3 if mode == "alert" else 0.6)
+                    wobble_y = math.cos(now * (39 if mode == "alert" else 0.75)) * (2 if mode == "alert" else 0.4)
+                    scale = min(width / 800, height / 480)
+                    center_y = height * 0.47 + wobble_y
+                    left_cx = width * 0.30 + wobble_x
+                    right_cx = width * 0.70 + wobble_x
+                    sleepy = mode == "sleepy"
+                    alert = mode == "alert"
+                    draw_eye(canvas, left_cx, center_y + 2 * scale, 84 * scale, 156 * scale, look_x, look_y, False, sleepy, alert)
+                    draw_eye(canvas, right_cx, center_y - 6 * scale, 90 * scale, 164 * scale, look_x, look_y, True, sleepy, alert)
                 draw_thought(canvas, state)
 
             fb.seek(0)

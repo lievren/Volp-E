@@ -7,13 +7,28 @@ venv/
 # Runtime/debug captures
 desktop-brain/latest_scene.jpg
 desktop-brain/latest_scene.json
+desktop-brain/latest_speech.wav
+vision/*.jpg
+vision/*.jpeg
+vision/*.png
 *.log
 *.tmp
+*.wav
 
 # Local models and generated packages
 models/*.tflite
+desktop-brain/piper/
+desktop-brain/voices/
+*.onnx
+*.onnx.json
 *.tar.gz
 *.zip
+
+# Local experiments kept out of the public release
+bin/start-svg-face.sh
+face/svg-eyes.html
+face/assets/eyes/
+systemd/volpe-face-svg.service
 
 # Local machine config
 .env

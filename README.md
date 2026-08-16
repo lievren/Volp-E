@@ -1,4 +1,4 @@
-# Volp-E
+﻿# Volp-E
 
 Volp-E est un projet de robot compagnon compact, expressif et évolutif, combinant robotique, impression 3D, vision par ordinateur et intelligence artificielle.
 
@@ -30,16 +30,19 @@ Volp-E doit rester :
 La version actuelle pose les bases du cerveau et du visage :
 
 - visage animé en framebuffer pour écran 5 pouces ;
+- bibliothèque d'expressions PNG, rendue sans Chromium ;
 - serveur local `volpe-brain` sur `http://127.0.0.1:8765` ;
 - détection caméra via Coral/PyCoral ;
-- suivi du regard par mouvement des pupilles ;
+- suivi du regard par changement rapide d'expressions ;
 - mode veille automatique après 5 minutes sans présence ;
 - cerveau externe optionnel sur PC ;
 - mémoire courte en RAM ;
 - humeur active ;
-- banque de phrases personnalisable.
+- personnalité configurable ;
+- banque de phrases personnalisable ;
+- voix hybride avec Piper côté PC et `espeak-ng` en secours local.
 
-Le rendu principal n'utilise plus Chromium : le visage est dessiné directement dans `/dev/fb0`, ce qui évite les pages blanches et réduit la charge sur une Raspberry Pi 3A+.
+Le rendu principal n'utilise plus Chromium : le visage est dessiné directement dans `/dev/fb0`, ce qui évite les pages blanches et réduit la charge sur une Raspberry Pi 3A+. Les yeux sont maintenant des images PNG transparentes préchargées, ce qui permet d'ajouter facilement de nouvelles expressions sans complexifier le moteur d'affichage.
 
 ## Volp-E V2
 
@@ -350,6 +353,26 @@ Elle expose aussi quelques curseurs de personnalité :
 - `familiarity` : augmente doucement quand une présence revient souvent ;
 - `attention` : cible actuelle de son attention (`person`, `person_close`, `searching`, `ambient`, `dream`).
 
+## Personnalité configurable
+
+La personnalité de Volp-E se règle dans :
+
+```txt
+config/personality.json
+```
+
+Ce fichier permet d'ajuster son nom, sa prononciation, son ton, ses seuils de présence, ses gains d'humeur, ses préfixes de phrases et les expressions utilisées selon son état.
+
+Les expressions visuelles pointent vers les fichiers PNG placés dans :
+
+```txt
+face/assets/eyes-png/
+```
+
+Au moment de l'installation, ces PNG sont utilisés avec les variantes pré-calculées dans `face/assets/eyes-rgb565/`, `face/assets/eyes-bgr24/` et `face/assets/eyes-bgrx32/` pour éviter de recalculer l'image à chaque frame sur la Raspberry Pi.
+
+L'objectif est de pouvoir enrichir Volp-E avec de nouveaux regards, clignements et émotions sans modifier le code principal.
+
 ## Banque de phrases
 
 Le cerveau PC lit les phrases dans :
@@ -373,6 +396,28 @@ Objectif conseillé pour une première vraie personnalité :
 - `description_face` : 10 phrases d'analyse interne avec `{distance_text}`, `{horizontal}`, `{vertical}`.
 
 Pour l'instant, viser des phrases courtes, lisibles en 1 ou 2 lignes sur l'écran. Ton doux, curieux, un peu robot compagnon.
+
+## Voix hybride
+
+Quand une phrase est produite par le cerveau PC, la Raspberry Pi demande d'abord une voix plus naturelle au serveur desktop (`/speak`). Si le PC n'est pas disponible, Volp-E utilise `espeak-ng` localement.
+
+Sur le PC, le serveur desktop utilise Piper si `desktop-brain/piper/piper.exe` et une voix dans `desktop-brain/voices/` sont présents. Sinon, il peut revenir à la voix Windows.
+
+Le texte affiché reste intact, mais la synthèse vocale remplace `Volp-E` par `Volpi` pour éviter la prononciation `volp eu`.
+
+Pour forcer une sortie audio ALSA sur la Raspberry Pi :
+
+```bash
+VOLPE_APLAY_DEVICE=plughw:1,0
+```
+
+Cette variable peut être placée dans `/etc/default/volp-e`, puis appliquée avec :
+
+```bash
+sudo systemctl restart volpe-brain.service
+```
+
+L'état vocal est visible dans `/api/state`, section `voice`.
 
 ## Volp-E Adventures
 
@@ -420,8 +465,8 @@ L'objectif serait d'obtenir quelque chose à mi-chemin entre robot compagnon, je
 
 ### Phase 2 - Expression
 
-- [ ] Créer les différents yeux
-- [ ] Ajouter le clignement
+- [x] Créer les premiers yeux PNG
+- [x] Ajouter le clignement
 - [x] Ajouter le suivi du regard
 - [ ] Synchroniser regard et tête
 - [ ] Créer plusieurs expressions
@@ -472,6 +517,10 @@ Supports envisagés :
 - code source ;
 - schémas électroniques ;
 - journal de développement.
+
+Un carnet de bord est disponible ici :
+
+- [docs/carnet-de-bord.md](docs/carnet-de-bord.md)
 
 L'objectif est de conserver une trace de chaque évolution du robot et de pouvoir suivre son développement de version en version.
 

@@ -1,0 +1,77 @@
+{
+  "name": "Volp-E",
+  "pronunciation": "Volpi",
+  "profile": "curious_companion",
+  "description": "Petit compagnon attentif, curieux et expressif. Il observe avant de parler, garde une energie douce, et reagit plus vivement quand une presence familiere s'approche.",
+  "tone": {
+    "warmth": 0.78,
+    "curiosity": 0.72,
+    "playfulness": 0.35,
+    "caution": 0.42,
+    "talkativeness": 0.55,
+    "energy_baseline": 0.55,
+    "shyness": 0.18
+  },
+  "speech": {
+    "enabled": true,
+    "min_interval_seconds": 4.0,
+    "think_cooldown_seconds": 12.0,
+    "prefix_chance": 0.18,
+    "prefixes": {
+      "happy": ["Ah.", "Tiens."],
+      "curious": ["Hm.", "Interessant."],
+      "sleepy": ["Doucement.", "Tout bas."],
+      "searching": ["Attends.", "Je regarde."],
+      "attentive": ["Ok.", "Je te suis."]
+    }
+  },
+  "memory": {
+    "max_events": 24,
+    "recent_seconds": 600,
+    "standby_after_seconds": 300,
+    "close_face_size": 0.70,
+    "presence_energy_gain": 0.10,
+    "presence_curiosity_gain": 0.12,
+    "presence_familiarity_gain": 0.04,
+    "presence_lost_curiosity_gain": 0.06,
+    "presence_close_energy_gain": 0.06,
+    "presence_close_familiarity_gain": 0.03,
+    "standby_energy_loss": 0.08,
+    "analysis_curiosity_gain": 0.03,
+    "face_energy_gain_per_second": 0.055,
+    "face_curiosity_gain_per_second": 0.040,
+    "face_familiarity_gain_per_second": 0.010,
+    "standby_energy_loss_per_second": 0.030,
+    "standby_curiosity_loss_per_second": 0.025,
+    "searching_energy_gain_per_second": 0.010,
+    "searching_curiosity_gain_per_second": 0.012,
+    "ambient_energy_loss_per_second": 0.018,
+    "ambient_curiosity_loss_per_second": 0.016
+  },
+  "attention": {
+    "face_close_size": 0.72,
+    "face_medium_size": 0.38,
+    "position_deadzone": 0.28
+  },
+  "expressions": {
+    "normal": "yeux_BASE",
+    "blink": "yeux_FERME",
+    "look_left_soft": "yeux_GAUCHE1",
+    "look_left": "yeux_GAUCHE2",
+    "look_right_soft": "yeux_DROITE1",
+    "look_right": "yeux_DROITE2",
+    "look_up_left": "regard_haut_gauche",
+    "look_up_right": "regard_haut_droit",
+    "look_down_left": "regard_bas_gauche",
+    "look_down_right": "regard_bas_droite",
+    "by_mood": {
+      "calm": "normal",
+      "curious": "normal",
+      "attentive": "normal",
+      "happy": "normal",
+      "searching": "look_left_soft",
+      "sleepy": "blink",
+      "dreaming": "blink"
+    }
+  }
+}

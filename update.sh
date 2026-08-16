@@ -19,6 +19,9 @@ rsync -a --delete \
 
 chmod +x "$APP_DIR/bin/start-face.sh"
 chmod +x "$APP_DIR/bin/start-face-fb.sh"
+if [ -f "$APP_DIR/bin/start-svg-face.sh" ]; then
+  chmod +x "$APP_DIR/bin/start-svg-face.sh"
+fi
 chmod +x "$APP_DIR/bin/start-vision.sh"
 chmod +x "$APP_DIR/update.sh"
 chmod +x "$APP_DIR/brain/volpe_brain.py"
@@ -26,13 +29,21 @@ chmod +x "$APP_DIR/face/fb_face.py"
 chmod +x "$APP_DIR/vision/face_tracker.py"
 chmod +x "$APP_DIR/vision/debug_snapshot.py"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+usermod -aG audio "$APP_USER" >/dev/null 2>&1 || true
 
 echo "[Volp-E] Refreshing systemd units..."
 cp "$APP_DIR/systemd/volpe-brain.service" /etc/systemd/system/volpe-brain.service
 cp "$APP_DIR/systemd/volpe-vision.service" /etc/systemd/system/volpe-vision.service
 cp "$APP_DIR/systemd/volpe-face-fb.service" /etc/systemd/system/volpe-face-fb.service
+if [ -f "$APP_DIR/systemd/volpe-face-svg.service" ]; then
+  cp "$APP_DIR/systemd/volpe-face-svg.service" /etc/systemd/system/volpe-face-svg.service
+fi
 cp "$APP_DIR/systemd/volpe-face.service" "/etc/systemd/system/volpe-face@.service"
+sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-brain.service
 sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-vision.service
+if [ -f /etc/systemd/system/volpe-face-svg.service ]; then
+  sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-face-svg.service
+fi
 
 if [ ! -f /etc/default/volp-e ]; then
   cat > /etc/default/volp-e <<'DEFAULTS'
@@ -46,6 +57,8 @@ systemctl daemon-reload
 systemctl enable volpe-brain.service
 systemctl enable volpe-vision.service
 systemctl enable volpe-face-fb.service
+systemctl stop volpe-face-svg.service >/dev/null 2>&1 || true
+systemctl disable volpe-face-svg.service >/dev/null 2>&1 || true
 systemctl disable "volpe-face@${APP_USER}.service" >/dev/null 2>&1 || true
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 
@@ -58,12 +71,18 @@ GETTY
 systemctl daemon-reload
 
 USER_HOME="$(getent passwd "$APP_USER" | cut -d: -f6)"
+if [ -n "$USER_HOME" ]; then
+  if [ -f /etc/systemd/system/volpe-face-svg.service ]; then
+    sed -i "s|^Environment=XAUTHORITY=.*|Environment=XAUTHORITY=${USER_HOME}/.Xauthority|" /etc/systemd/system/volpe-face-svg.service >/dev/null 2>&1 || true
+  fi
+fi
 if [ -n "$USER_HOME" ] && [ -d "$USER_HOME" ]; then
   cat > "$USER_HOME/.bash_profile" <<'PROFILE'
 # Volp-E face is now rendered by volpe-face-fb.service directly on /dev/fb0.
 PROFILE
   chown "$APP_USER:$APP_USER" "$USER_HOME/.bash_profile"
 fi
+systemctl daemon-reload
 
 systemctl stop "volpe-face@${APP_USER}.service" >/dev/null 2>&1 || true
 systemctl stop getty@tty1.service >/dev/null 2>&1 || true
@@ -76,3 +95,5 @@ systemctl restart volpe-face-fb.service
 echo "[Volp-E] Update done."
 echo "Check with:"
 echo "  curl 'http://127.0.0.1:8765/api/state'"
+echo "Face renderer:"
+echo "  sudo systemctl status volpe-face-fb.service --no-pager"

@@ -5,7 +5,7 @@ Wants=volpe-brain.service
 
 [Service]
 Type=simple
-User=pi
+User=renaud
 WorkingDirectory=/opt/volp-e
 ExecStartPre=/bin/sleep 8
 ExecStart=/opt/volp-e/bin/start-vision.sh

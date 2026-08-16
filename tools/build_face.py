@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import os
 import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SVG = Path(os.environ.get("VOLPE_SOURCE_SVG", "assets/face.svg"))
+SOURCE_SVG = Path("assets/face.svg")
 OUT_HTML = ROOT / "face" / "index.html"
 
 
@@ -561,6 +560,11 @@ def html(svg: str) -> str:
 
 
 def main() -> None:
+    if not SOURCE_SVG.exists():
+        raise SystemExit(
+            "Missing source SVG. Put it at assets/face.svg or update SOURCE_SVG "
+            "for your local workspace."
+        )
     source = SOURCE_SVG.read_text(encoding="utf-8")
     OUT_HTML.write_text(html(clean_svg(source)), encoding="utf-8")
     print(f"Wrote {OUT_HTML}")

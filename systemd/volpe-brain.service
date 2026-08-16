@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=renaud
 WorkingDirectory=/opt/volp-e
 EnvironmentFile=-/etc/default/volp-e
 ExecStart=/usr/bin/python3 /opt/volp-e/brain/volpe_brain.py

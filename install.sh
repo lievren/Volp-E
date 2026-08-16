@@ -12,7 +12,7 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "[Volp-E] Installing packages..."
 apt-get update
-apt-get install -y python3 python3-opencv python3-picamera2 xserver-xorg xinit unclutter rsync curl
+apt-get install -y python3 python3-opencv python3-picamera2 xserver-xorg xinit unclutter rsync curl espeak-ng alsa-utils
 
 if apt-cache show python3-pycoral >/dev/null 2>&1; then
   apt-get install -y python3-pycoral
@@ -40,6 +40,7 @@ chmod +x "$APP_DIR/face/fb_face.py"
 chmod +x "$APP_DIR/vision/face_tracker.py"
 chmod +x "$APP_DIR/vision/debug_snapshot.py"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+usermod -aG audio "$APP_USER" >/dev/null 2>&1 || true
 
 echo "[Volp-E] Installing systemd services..."
 if [ ! -f /etc/default/volp-e ]; then
@@ -54,6 +55,7 @@ cp "$APP_DIR/systemd/volpe-brain.service" /etc/systemd/system/volpe-brain.servic
 cp "$APP_DIR/systemd/volpe-vision.service" /etc/systemd/system/volpe-vision.service
 cp "$APP_DIR/systemd/volpe-face-fb.service" /etc/systemd/system/volpe-face-fb.service
 cp "$APP_DIR/systemd/volpe-face.service" "/etc/systemd/system/volpe-face@.service"
+sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-brain.service
 sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-vision.service
 
 systemctl daemon-reload
