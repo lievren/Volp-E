@@ -18,3 +18,4 @@ Notes materiel :
 - Premier montage fonctionnel de la tete imprimee en PETG.
 - Integration de l'ecran, Raspberry Pi, Coral USB, camera et haut-parleur jack.
 - Refroidissement a prevoir avant usage prolonge.
+
