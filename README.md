@@ -23,16 +23,16 @@ Le projet est encore en développement et évolue au fil des prototypes.
 
 La version actuelle sait notamment :
 
-* afficher un visage expressif sur l'écran 5 pouces ;
-* détecter et suivre une présence via la caméra ;
-* utiliser Coral / PyCoral pour la vision ;
-* adapter son état selon la proximité et la présence d'une personne ;
-* maintenir une mémoire courte en RAM ;
-* gérer plusieurs humeurs internes (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) ;
-* envoyer son état et des images vers un **Desktop Brain** sur PC ;
-* sélectionner des phrases selon le contexte dans `desktop-brain/phrases.json` ;
-* produire une voix via Piper sur le PC, avec `espeak-ng` comme solution de secours sur la Raspberry Pi ;
-* passer automatiquement en veille après une période sans présence.
+- afficher un visage expressif sur l'écran 5 pouces ;
+- détecter et suivre une présence via la caméra ;
+- utiliser Coral / PyCoral pour la vision ;
+- adapter son état selon la proximité et la présence d'une personne ;
+- maintenir une mémoire courte en RAM ;
+- gérer plusieurs humeurs internes (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) ;
+- envoyer son état et des images vers un **Desktop Brain** sur PC ;
+- sélectionner des phrases selon le contexte dans `desktop-brain/phrases.json` ;
+- produire une voix via Piper sur le PC, avec `espeak-ng` comme solution de secours sur la Raspberry Pi ;
+- passer automatiquement en veille après une période sans présence.
 
 ## Architecture
 
@@ -179,16 +179,16 @@ desktop-brain/phrases.json
 
 Elles sont classées selon le contexte :
 
-* personne très proche ;
-* personne à distance normale ;
-* personne éloignée ;
-* aucune présence ;
-* retour d'une présence ;
-* présence continue ;
-* perte d'une présence ;
-* humeur joyeuse ;
-* humeur fatiguée ;
-* humeur curieuse.
+- personne très proche ;
+- personne à distance normale ;
+- personne éloignée ;
+- aucune présence ;
+- retour d'une présence ;
+- présence continue ;
+- perte d'une présence ;
+- humeur joyeuse ;
+- humeur fatiguée ;
+- humeur curieuse.
 
 Cette banque est volontairement personnelle : elle sert à construire progressivement la personnalité propre de Volp-E.
 
@@ -202,11 +202,11 @@ config/personality.json
 
 Elle pilote notamment :
 
-* le nom et la prononciation ;
-* la chaleur et la curiosité ;
-* le niveau de bavardage ;
-* la vitesse d'évolution de l'énergie, de la curiosité et de la familiarité ;
-* certains seuils d'attention liés à la caméra.
+- le nom et la prononciation ;
+- la chaleur et la curiosité ;
+- le niveau de bavardage ;
+- la vitesse d'évolution de l'énergie, de la curiosité et de la familiarité ;
+- certains seuils d'attention liés à la caméra.
 
 ## Voix
 
@@ -246,17 +246,45 @@ Exemple de convention de nommage :
 2026-09-02-head-pan-tilt.jpg
 ```
 
+Cela permet de garder une trace visuelle de l'évolution de Volp-E sans mélanger les photos avec le code.
+
+
+## Journal de bord
+
+### 16–17 août 2026 — Remise à plat et grosse évolution logicielle
+
+Cette session marque une étape importante du projet : la version fonctionnelle réellement utilisée par Volp-E a été récupérée depuis la Raspberry Pi après qu'une copie locale du projet ait été altérée.
+
+Principales évolutions :
+
+- récupération de la version fonctionnelle présente dans `/opt/volp-e` sur la Raspberry Pi ;
+- sauvegarde des services `systemd`, de la configuration et de l'environnement logiciel de la Pi ;
+- reconstruction d'un dépôt GitHub propre à partir de cette version fonctionnelle ;
+- conservation des STL, de la documentation et des éléments historiques du projet ;
+- nettoyage des anciens fichiers temporaires, backups et assets devenus inutiles ;
+- intégration du nouveau système de visage **Face V2** et de ses nouveaux assets ;
+- ajout du modèle Coral / Edge TPU utilisé par la vision ;
+- ajout d'une galerie et d'une photo du prototype actuel dans le dépôt ;
+- remplacement de la banque de phrases de démonstration par une première banque de phrases entièrement personnelle ;
+- modification du Desktop Brain pour varier davantage les catégories de phrases ;
+- ajout d'une mémoire anti-répétition afin d'éviter que Volp-E répète les mêmes phrases trop souvent ;
+- la familiarité n'impose plus systématiquement l'humeur `happy` : elle influence désormais le choix des réactions au lieu de le verrouiller ;
+- test et adoption de la voix masculine **Piper Tom Medium** pour le Desktop Brain ;
+- ajout d'un lanceur Windows `.cmd` permettant de démarrer facilement le Desktop Brain avec la bonne voix sans dépendre de la politique d'exécution PowerShell.
+
+À la fin de cette session, Volp-E démarre correctement avec son visage actuel, sa vision, son Desktop Brain, sa banque de phrases personnelle et sa nouvelle voix masculine.
+
 ## Roadmap
 
 Prochaines pistes de développement :
 
-* enrichir la personnalité et la banque de phrases ;
-* améliorer l'analyse d'image côté PC ;
-* poursuivre le suivi pan/tilt de la tête ;
-* intégrer les mouvements du bras robotique ;
-* ajouter progressivement locomotion et interactions physiques ;
-* faire évoluer la mémoire et les comportements autonomes ;
-* documenter les versions mécaniques et électroniques.
+- enrichir la personnalité et la banque de phrases ;
+- améliorer l'analyse d'image côté PC ;
+- poursuivre le suivi pan/tilt de la tête ;
+- intégrer les mouvements du bras robotique ;
+- ajouter progressivement locomotion et interactions physiques ;
+- faire évoluer la mémoire et les comportements autonomes ;
+- documenter les versions mécaniques et électroniques.
 
 ## Galerie
 

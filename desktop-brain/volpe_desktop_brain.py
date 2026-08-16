@@ -35,6 +35,9 @@ DEFAULT_PERSONALITY = {
     },
     "speech": {
         "prefix_chance": 0.18,
+        # Number of recently used phrases that should not be selected again
+        # when another choice exists.
+        "recent_phrase_memory": 5,
         "prefixes": {
             "happy": ["Ah.", "Tiens."],
             "curious": ["Hm.", "Interessant."],
@@ -118,6 +121,7 @@ STATE = {
     "last_error": "",
     "last_intention": None,
     "personality": {},
+    "recent_speech": [],
 }
 
 
@@ -177,8 +181,106 @@ def load_phrases():
     return phrases
 
 
-def say(category):
-    return random.choice(load_phrases().get(category, DEFAULT_PHRASES[category]))
+RECENT_SPEECH = []
+
+
+def recent_phrase_memory():
+    """How many recently spoken phrases should be avoided."""
+    try:
+        value = int(PERSONALITY.get("speech", {}).get("recent_phrase_memory", 5))
+    except (TypeError, ValueError):
+        value = 5
+    return max(0, min(20, value))
+
+
+def remember_phrase(text):
+    text = str(text or "").strip()
+    if not text:
+        return
+
+    RECENT_SPEECH.append(text)
+    limit = recent_phrase_memory()
+    if limit <= 0:
+        RECENT_SPEECH.clear()
+    elif len(RECENT_SPEECH) > limit:
+        del RECENT_SPEECH[:-limit]
+
+    STATE["recent_speech"] = list(RECENT_SPEECH)
+
+
+def say(category, remember=True):
+    """Pick a phrase while avoiding recently used phrases when possible."""
+    phrases = load_phrases()
+    fallback = DEFAULT_PHRASES.get(category, [])
+    candidates = list(phrases.get(category, fallback))
+
+    if not candidates:
+        return ""
+
+    if remember and RECENT_SPEECH:
+        fresh = [phrase for phrase in candidates if phrase not in RECENT_SPEECH]
+        if fresh:
+            candidates = fresh
+
+    selected = random.choice(candidates)
+
+    if remember:
+        remember_phrase(selected)
+
+    return selected
+
+
+def choose_weighted_category(weighted_categories):
+    """Choose one phrase category from [(category, weight), ...]."""
+    available = []
+    weights = []
+    phrases = load_phrases()
+
+    for category, weight in weighted_categories:
+        try:
+            weight = float(weight)
+        except (TypeError, ValueError):
+            continue
+        if weight <= 0:
+            continue
+        if phrases.get(category) or DEFAULT_PHRASES.get(category):
+            available.append(category)
+            weights.append(weight)
+
+    if not available:
+        return None
+
+    return random.choices(available, weights=weights, k=1)[0]
+
+
+def choose_face_speech(distance_category, active_mood, memory_mood, curiosity, familiarity):
+    """
+    Mix contextual phrases instead of letting one mood monopolise speech.
+
+    Typical familiar-presence mix:
+      - distance/context:       ~45 %
+      - continuing presence:   ~25 %
+      - happy/familiar mood:   ~15 %
+      - curiosity:             ~15 %
+
+    Mood categories get less weight when their condition is not active.
+    """
+    happy_active = active_mood == "happy" or familiarity >= 0.50
+    curious_active = (
+        active_mood == "curious"
+        or memory_mood == "curious"
+        or curiosity >= 0.65
+    )
+
+    weighted = [
+        (distance_category, 0.45),
+        ("presence_continues", 0.25),
+        ("mood_happy", 0.15 if happy_active else 0.03),
+        ("mood_curious", 0.15 if curious_active else 0.03),
+    ]
+
+    category = choose_weighted_category(weighted) or distance_category
+    return say(category)
 
 
 def chance(base_probability):
@@ -200,7 +302,7 @@ def style_speech(text, mood):
 
 
 def describe_face(distance_text, horizontal, vertical):
-    template = say("description_face")
+    template = say("description_face", remember=False)
     return template.format(
         distance_text=distance_text,
         horizontal=horizontal,
@@ -332,26 +434,39 @@ def build_intention(state):
         if size >= face_close_size:
             distance = "close"
             distance_text = "proche"
-            speech = say("face_close")
+            distance_category = "face_close"
         elif size >= face_medium_size:
             distance = "medium"
             distance_text = "a distance moyenne"
-            speech = say("face_medium")
+            distance_category = "face_medium"
         else:
             distance = "far"
             distance_text = "loin"
-            speech = say("face_far")
+            distance_category = "face_far"
 
-        if last_kind == "presence_arrived" and as_float(last_event.get("at"), 0.0) > time.time() - 12:
-            speech = say("presence_returned")
-        elif active_mood == "happy" or familiarity >= 0.50:
-            speech = say("mood_happy")
-        elif active_mood == "attentive" and size >= face_close_size and chance(0.45):
-            speech = say("face_close")
-        elif memory_mood == "curious" and chance(0.35):
-            speech = say("presence_continues")
-        elif curiosity >= 0.72 and chance(0.35):
-            speech = say("mood_curious")
+        # A newly returned presence should usually trigger a "welcome back"
+        # reaction, but not every single time.
+        presence_just_arrived = (
+            last_kind == "presence_arrived"
+            and as_float(last_event.get("at"), 0.0) > time.time() - 12
+        )
+
+        if presence_just_arrived:
+            category = choose_weighted_category([
+                ("presence_returned", 0.80),
+                (distance_category, 0.20),
+            ]) or "presence_returned"
+            speech = say(category)
+        else:
+            # Familiarity and happiness now INFLUENCE the choice instead of
+            # forcing mood_happy on every analysis.
+            speech = choose_face_speech(
+                distance_category=distance_category,
+                active_mood=active_mood,
+                memory_mood=memory_mood,
+                curiosity=curiosity,
+                familiarity=familiarity,
+            )
 
         horizontal = "center"
         if x < -deadzone:
@@ -397,7 +512,7 @@ def build_intention(state):
     mood = active_mood if active_mood in {"sleepy", "curious", "searching", "dreaming"} else "calm"
 
     return {
-        "description": say("no_presence"),
+        "description": say("no_presence", remember=False),
         "mood": mood,
         "suggested_mode": "normal",
         "speech": style_speech(speech, mood),
