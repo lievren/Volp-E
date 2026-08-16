@@ -1,17 +1,94 @@
-# Volp-E Raspberry Pi starter
+<p align="center">
+  <img src="assets/images/volpe-hero.jpg" alt="Volp-E" width="720">
+</p>
 
-Socle actuel du cerveau de Volp-E.
+<h1 align="center">Volp-E</h1>
 
-Ce paquet installe :
+<p align="center">
+  <strong>Un petit compagnon robotique expressif, curieux et évolutif.</strong><br>
+  Raspberry Pi • Vision • Coral Edge TPU • Visage animé • Voix • Desktop Brain
+</p>
 
-- visage SVG anime en paysage pour ecran 5 pouces ;
-- serveur local `volpe-brain` sur `http://127.0.0.1:8765` ;
-- detection camera via Coral/PyCoral ;
-- mode veille automatique apres 5 minutes sans presence ;
-- client optionnel vers un cerveau externe sur PC.
-- autologin console sur `tty1` pour lancer le visage sans clavier.
+---
 
-## Installation sur la Raspberry
+## À propos
+
+**Volp-E** (prononcé *Volpi*) est un projet de robot compagnon construit autour d'une Raspberry Pi, d'un écran 5 pouces, d'une caméra et d'un cerveau externe optionnel sur PC.
+
+L'objectif est de lui donner progressivement une présence crédible : regarder les personnes autour de lui, réagir à leur proximité, exprimer différents états, parler, mémoriser des événements récents et, à terme, interagir physiquement avec son environnement.
+
+Le projet est encore en développement et évolue au fil des prototypes.
+
+## État actuel
+
+La version actuelle sait notamment :
+
+* afficher un visage expressif sur l'écran 5 pouces ;
+* détecter et suivre une présence via la caméra ;
+* utiliser Coral / PyCoral pour la vision ;
+* adapter son état selon la proximité et la présence d'une personne ;
+* maintenir une mémoire courte en RAM ;
+* gérer plusieurs humeurs internes (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) ;
+* envoyer son état et des images vers un **Desktop Brain** sur PC ;
+* sélectionner des phrases selon le contexte dans `desktop-brain/phrases.json` ;
+* produire une voix via Piper sur le PC, avec `espeak-ng` comme solution de secours sur la Raspberry Pi ;
+* passer automatiquement en veille après une période sans présence.
+
+## Architecture
+
+```text
+                         ┌─────────────────────────┐
+                         │       Desktop PC        │
+                         │                         │
+                         │  volpe_desktop_brain.py │
+                         │  phrases.json           │
+                         │  Piper / TTS             │
+                         │  HTTP :8787              │
+                         └───────────▲─────────────┘
+                                     │
+                           réseau local / HTTP
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────┐
+│                  Raspberry Pi                     │
+│                                                   │
+│  volpe-brain :8765                                │
+│  vision + Coral                                   │
+│  mémoire courte                                   │
+│  visage / framebuffer                             │
+│  synthèse vocale locale de secours                │
+└───────────────┬────────────────────────────────────┘
+                │
+                ▼
+        Écran • Caméra • Audio
+```
+
+## Structure du dépôt
+
+```text
+Volp-E/
+├── assets/
+│   └── images/
+│       ├── volpe-hero.jpg
+│       └── progress/
+├── bin/
+├── brain/
+├── config/
+├── desktop-brain/
+├── face/
+├── hardware/
+├── models/
+├── systemd/
+├── tools/
+├── vision/
+├── install.sh
+├── update.sh
+└── README.md
+```
+
+## Installation sur la Raspberry Pi
+
+Après avoir copié le projet sur la Pi :
 
 ```bash
 cd ~/volp-e-pi
@@ -19,23 +96,30 @@ sudo ./install.sh
 sudo reboot
 ```
 
-## Mise a jour rapide
-
-Quand les paquets systeme sont deja installes, utiliser ceci au lieu de `install.sh` :
+Pour une mise à jour lorsque les dépendances système sont déjà installées :
 
 ```bash
 cd ~/volp-e-pi
 sudo ./update.sh
 ```
 
-## Services
+### Services principaux
 
 ```bash
 sudo systemctl status volpe-brain.service --no-pager
 sudo systemctl status volpe-vision.service --no-pager
+sudo systemctl status volpe-face-fb.service --no-pager
 ```
 
-## Modes visage
+## API locale de la Pi
+
+Le cerveau local écoute sur :
+
+```text
+http://127.0.0.1:8765
+```
+
+Quelques commandes utiles :
 
 ```bash
 curl 'http://127.0.0.1:8765/api/mode?mode=normal'
@@ -45,29 +129,34 @@ curl 'http://127.0.0.1:8765/api/mode?mode=standby'
 curl 'http://127.0.0.1:8765/api/state'
 ```
 
-## Cerveau externe sur PC
+## Desktop Brain
 
-Sur le PC, lancer :
+Le cerveau PC se trouve dans :
+
+```text
+desktop-brain/
+```
+
+Depuis Windows PowerShell :
 
 ```powershell
-cd C:\Users\renau\Documents\Codex\2026-05-20\files-mentioned-by-the-user-visage\volp-e-pi\desktop-brain
+cd desktop-brain
 .\start-desktop-brain.ps1
 ```
 
-Le serveur PC ecoute sur :
+Il écoute sur :
 
-```txt
+```text
 http://0.0.0.0:8787
 ```
 
-Depuis la Pi, configurer l'adresse IP du PC dans `/etc/default/volp-e`.
-Exemple si le PC est `IP_DU_PC` :
+Sur la Pi, renseigner l'adresse du PC dans :
 
-```bash
-sudo nano /etc/default/volp-e
+```text
+/etc/default/volp-e
 ```
 
-Mettre :
+Exemple :
 
 ```bash
 VOLPE_EXTERNAL_BRAIN_URL=http://IP_DU_PC:8787
@@ -78,154 +167,107 @@ Puis :
 ```bash
 sudo systemctl restart volpe-brain.service
 curl 'http://127.0.0.1:8765/api/external/check'
-curl 'http://127.0.0.1:8765/api/analyze_scene'
-curl 'http://127.0.0.1:8765/api/think'
-```
-
-Le serveur PC sauvegarde la derniere image recue ici :
-
-```txt
-desktop-brain/latest_scene.jpg
-```
-
-Le cerveau PC repond maintenant avec une intention structuree :
-
-```json
-{
-  "description": "Presence detectee a distance moyenne. Position: center/center.",
-  "mood": "curious",
-  "suggested_mode": "alert",
-  "speech": "Je te vois devant moi.",
-  "attention": {
-    "priority": "person",
-    "x": 0.0,
-    "y": 0.0,
-    "size": 0.5
-  },
-  "actions": [
-    {"type": "face_mode", "mode": "alert"}
-  ]
-}
-```
-
-La Pi stocke cette reponse dans `/api/state`, section `thought`, et applique le mode visage conseille. Quand une presence est detectee, une analyse automatique est declenchee au maximum toutes les 30 secondes.
-
-La Pi envoie aussi `face_recent`, `vision_age` et `memory` au cerveau PC. Si une analyse arrive en retard et propose `normal` alors qu'une presence est active, la Pi garde le visage en `alert`.
-
-## Memoire courte
-
-Volp-E garde une memoire RAM des derniers evenements, visible dans `/api/state`, section `memory`.
-
-Elle retient notamment :
-
-- arrivee d'une presence ;
-- perte d'une presence ;
-- presence proche ;
-- entree en veille ;
-- derniere analyse recue du cerveau PC.
-
-Cette memoire ne s'ecrit pas en boucle sur la carte SD. Elle sert deja a calculer une humeur courte (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) et a enrichir les phrases du cerveau PC.
-
-Elle expose aussi quelques curseurs de personnalite :
-
-- `energy` : energie interne, baisse dans le calme et remonte avec la presence ;
-- `curiosity` : monte quand quelque chose attire son attention ;
-- `familiarity` : augmente doucement quand une presence revient souvent ;
-- `attention` : cible actuelle de son attention (`person`, `person_close`, `searching`, `ambient`, `dream`).
-
-## Personnalite configurable
-
-La personnalite de Volp-E se regle dans :
-
-```txt
-config/personality.json
-```
-
-Ce fichier pilote deja :
-
-- le nom et la prononciation vocale (`name`, `pronunciation`) ;
-- le profil global (`profile`, `description`) ;
-- les curseurs de ton (`warmth`, `curiosity`, `playfulness`, `talkativeness`, etc.) ;
-- les delais de parole et de pensee ;
-- la vitesse a laquelle la memoire courte gagne ou perd energie, curiosite et familiarite ;
-- les seuils d'attention camera ;
-- une premiere table de correspondance pour les futures expressions PNG.
-
-Apres modification sur la Pi :
-
-```bash
-cd ~/volp-e-pi
-sudo ./update.sh
-sudo systemctl restart volpe-brain.service
-curl 'http://127.0.0.1:8765/api/personality'
-```
-
-Apres modification cote PC, redemarrer simplement :
-
-```powershell
-cd desktop-brain
-.\start-desktop-brain.ps1
-```
-
-Le cerveau PC expose aussi :
-
-```txt
-http://127.0.0.1:8787/personality
 ```
 
 ## Banque de phrases
 
-Le cerveau PC lit les phrases dans :
+Les phrases du Desktop Brain sont stockées dans :
 
-```txt
+```text
 desktop-brain/phrases.json
 ```
 
-Objectif conseille pour une premiere vraie personnalite :
+Elles sont classées selon le contexte :
 
-- `face_close` : 20 phrases quand quelqu'un est tres proche.
-- `face_medium` : 20 phrases quand quelqu'un est devant lui a distance normale.
-- `face_far` : 15 phrases quand une presence est plus loin.
-- `no_presence` : 15 phrases quand la scene est calme.
-- `presence_returned` : 10 phrases quand quelqu'un revient apres une courte absence.
-- `presence_continues` : 10 phrases quand Volp-E suit deja quelqu'un.
-- `presence_lost` : 10 phrases quand une presence sort du champ.
-- `mood_happy` : 10 phrases quand Volp-E est content ou reconnait une presence familiere.
-- `mood_sleepy` : 10 phrases quand son energie baisse.
-- `mood_curious` : 10 phrases quand sa curiosite monte.
-- `description_face` : 10 phrases d'analyse interne avec `{distance_text}`, `{horizontal}`, `{vertical}`.
+* personne très proche ;
+* personne à distance normale ;
+* personne éloignée ;
+* aucune présence ;
+* retour d'une présence ;
+* présence continue ;
+* perte d'une présence ;
+* humeur joyeuse ;
+* humeur fatiguée ;
+* humeur curieuse.
 
-Pour l'instant, vise des phrases courtes, lisibles en 1 ou 2 lignes sur l'ecran. Ton doux, curieux, un peu robot compagnon.
+Cette banque est volontairement personnelle : elle sert à construire progressivement la personnalité propre de Volp-E.
 
-## Voix hybride
+## Personnalité
 
-Quand une phrase est recue du cerveau PC, la Pi essaie d'abord de demander une voix plus naturelle au serveur desktop (`/speak`). Si le PC n'est pas joignable, Volp-E parle quand meme avec `espeak-ng` sur la Raspberry.
+La personnalité générale est configurée dans :
 
-Sur le PC, le serveur desktop utilise Piper si `desktop-brain/piper/piper.exe` et la voix `desktop-brain/voices/fr_FR-siwis-medium.onnx` sont presents. Sinon, il tente la voix Windows. Le texte affiche reste intact, mais la synthese vocale remplace `Volp-E` par `Volpi` pour eviter la prononciation `volp eu`.
-
-Les pensees recues du cerveau externe declenchent automatiquement la voix. La Pi sauvegarde le dernier son recu dans `/tmp/volpe-speech.wav`, puis le joue avec `aplay`, comme le test manuel. Si une autre sortie audio doit etre forcee, ajoute par exemple `VOLPE_APLAY_DEVICE=plughw:1,0` dans `/etc/default/volp-e`, puis redemarre `volpe-brain.service`.
-
-Installation de Piper sur Windows :
-
-```powershell
-cd desktop-brain
-.\install-piper-windows.ps1
-.\start-desktop-brain.ps1
+```text
+config/personality.json
 ```
 
-Test rapide sur la Pi :
+Elle pilote notamment :
+
+* le nom et la prononciation ;
+* la chaleur et la curiosité ;
+* le niveau de bavardage ;
+* la vitesse d'évolution de l'énergie, de la curiosité et de la familiarité ;
+* certains seuils d'attention liés à la caméra.
+
+## Voix
+
+Le Desktop Brain tente d'abord d'utiliser **Piper** pour produire la voix.
+
+Si le serveur PC n'est pas disponible, la Raspberry Pi peut utiliser **espeak-ng** comme solution de secours.
+
+Test manuel :
 
 ```bash
 curl 'http://127.0.0.1:8765/api/say?text=Bonjour%20je%20suis%20Volp-E'
-curl 'http://127.0.0.1:8765/api/state'
-aplay /tmp/volpe-speech.wav
 ```
 
-Dans `/api/state`, la section `voice.last_engine` indique `desktop` si le PC a genere la voix, ou `espeak-ng` si la Pi a utilise la voix locale de secours. `voice.last_desktop_engine` indique ensuite `piper` ou `windows-sapi`.
+## Matériel 3D
 
-## Prochaines etapes
+Les éléments mécaniques destinés au projet peuvent être conservés dans :
 
-- brancher une vraie analyse image cote PC ;
-- remplacer la voix desktop basique par une voix TTS plus naturelle ;
-- ajouter Arduino Uno en liaison serie pour tete, bras et roues ;
-- transformer la detection visage en consignes pan/tilt.
+```text
+hardware/3d/
+```
+
+Les STL peuvent ainsi évoluer avec le logiciel tout en restant séparés du code.
+
+## Journal visuel du projet
+
+Les photos d'avancement sont conservées dans :
+
+```text
+assets/images/progress/
+```
+
+Exemple de convention de nommage :
+
+```text
+2026-08-16-volpe-desktop-brain.jpg
+2026-08-20-camera-mount-v2.jpg
+2026-09-02-head-pan-tilt.jpg
+```
+
+## Roadmap
+
+Prochaines pistes de développement :
+
+* enrichir la personnalité et la banque de phrases ;
+* améliorer l'analyse d'image côté PC ;
+* poursuivre le suivi pan/tilt de la tête ;
+* intégrer les mouvements du bras robotique ;
+* ajouter progressivement locomotion et interactions physiques ;
+* faire évoluer la mémoire et les comportements autonomes ;
+* documenter les versions mécaniques et électroniques.
+
+## Galerie
+
+### Prototype actuel — août 2026
+
+<p align="center">
+  <img src="assets/images/progress/2026-08-16-volpe-prototype.jpg" alt="Prototype Volp-E - août 2026" width="560">
+</p>
+
+---
+
+<p align="center">
+  <strong>Volp-E est un projet expérimental en développement continu.</strong>
+</p>
