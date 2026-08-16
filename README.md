@@ -1,234 +1,15 @@
-﻿# Volp-E
+# Volp-E Raspberry Pi starter
 
-Volp-E est un projet de robot compagnon compact, expressif et évolutif, combinant robotique, impression 3D, vision par ordinateur et intelligence artificielle.
+Socle actuel du cerveau de Volp-E.
 
-L'objectif n'est pas seulement de construire un robot capable de bouger ou d'exécuter des commandes, mais de créer un petit compagnon qui donne réellement l'impression d'être présent : il regarde, réagit, se déplace, manipule son environnement et pourra progressivement développer de nouvelles interactions.
+Ce paquet installe :
 
-Le projet est développé progressivement, en privilégiant des fonctions simples, fiables et modulaires plutôt qu'un système trop complexe essayant de tout faire en même temps.
-
-## Vision
-
-Volp-E doit rester :
-
-- compact ;
-- relativement simple à fabriquer ;
-- évolutif ;
-- modulaire ;
-- expressif ;
-- capable d'interagir avec son environnement réel.
-
-À terme, Volp-E pourrait devenir à la fois :
-
-- un robot compagnon ;
-- une plateforme expérimentale de robotique ;
-- un projet open source documenté ;
-- un support pour apprendre la programmation, l'électronique et la conception 3D ;
-- et potentiellement un véritable produit.
-
-## Version actuelle
-
-La version actuelle pose les bases du cerveau et du visage :
-
-- visage animé en framebuffer pour écran 5 pouces ;
-- bibliothèque d'expressions PNG, rendue sans Chromium ;
+- visage SVG anime en paysage pour ecran 5 pouces ;
 - serveur local `volpe-brain` sur `http://127.0.0.1:8765` ;
-- détection caméra via Coral/PyCoral ;
-- suivi du regard par changement rapide d'expressions ;
-- mode veille automatique après 5 minutes sans présence ;
-- cerveau externe optionnel sur PC ;
-- mémoire courte en RAM ;
-- humeur active ;
-- personnalité configurable ;
-- banque de phrases personnalisable ;
-- voix hybride avec Piper côté PC et `espeak-ng` en secours local.
-
-Le rendu principal n'utilise plus Chromium : le visage est dessiné directement dans `/dev/fb0`, ce qui évite les pages blanches et réduit la charge sur une Raspberry Pi 3A+. Les yeux sont maintenant des images PNG transparentes préchargées, ce qui permet d'ajouter facilement de nouvelles expressions sans complexifier le moteur d'affichage.
-
-## Volp-E V2
-
-L'objectif actuel est de construire une V2 compacte et fonctionnelle.
-
-Dimensions visées pour le robot complet : environ 30 à 40 cm de hauteur.
-
-La V2 doit idéalement être capable de :
-
-- afficher un visage animé ;
-- suivre une personne du regard ;
-- orienter sa tête ;
-- détecter certains objets avec sa caméra ;
-- utiliser un bras robotique ;
-- attraper un objet prédéfini ;
-- se déplacer sur roues ;
-- coordonner perception, navigation et manipulation.
-
-## Tête
-
-La tête actuelle mesure approximativement :
-
-- 125 mm de large ;
-- 40 mm de profondeur ;
-- 80 mm de haut ;
-- environ 400 g une fois complètement assemblée.
-
-Elle contient notamment :
-
-- un écran d'environ 5 pouces ;
-- une caméra ;
-- l'électronique nécessaire au visage ;
-- un système pan/tilt.
-
-Deux servomoteurs seront utilisés :
-
-- pan : rotation gauche/droite ;
-- tilt : mouvement haut/bas.
-
-Pour le premier prototype, des MG996R seront utilisés. Une optimisation avec des servos plus petits pourra être étudiée plus tard afin de réduire le poids et la consommation électrique.
-
-## Système de regard
-
-Une fonction importante de Volp-E est le suivi du regard.
-
-La caméra détecte la position d'une personne et le robot adapte :
-
-- l'orientation de sa tête ;
-- la position de ses yeux à l'écran.
-
-### Utiliser le clignement pour masquer le calcul
-
-Une idée importante du projet consiste à transformer les limites techniques en comportement naturel.
-
-Au lieu de déplacer continuellement les yeux :
-
-1. Volp-E regarde dans une direction.
-2. Le système détecte qu'une nouvelle position doit être regardée.
-3. Volp-E ferme les yeux.
-4. Pendant le clignement, le système calcule la nouvelle position.
-5. Les yeux se rouvrent directement dans la nouvelle direction.
-
-Le délai informatique devient donc une animation naturelle du personnage. Cette limitation peut ainsi devenir une caractéristique de la personnalité de Volp-E.
-
-## Bras robotique
-
-La V2 utilisera probablement un bras simple composé de :
-
-- 3 axes principaux ;
-- 1 pince.
-
-Soit environ 4 servomoteurs.
-
-Pour le premier prototype, 4 MG996R seront utilisés. Le bras n'a pas vocation dans un premier temps à manipuler n'importe quel objet : l'objectif est d'obtenir une démonstration fiable dans un environnement connu.
-
-## Détection et manipulation d'objets
-
-Un premier scénario envisagé : Volp-E doit pouvoir reconnaître une boîte ou un petit objet spécialement conçu pour lui.
-
-L'objet pourrait comporter :
-
-- un motif visuel ;
-- un symbole ;
-- un marqueur ;
-- ou un code facilement identifiable par la caméra.
-
-L'objectif n'est donc pas immédiatement de faire de la reconnaissance universelle d'objets.
-
-La logique pourrait être :
-
-```text
-Caméra -> Détection -> Navigation -> Positionnement -> Bras -> Préhension
-```
-
-Exemple :
-
-1. Volp-E détecte une boîte.
-2. Il estime sa position dans l'image.
-3. Il s'oriente vers elle.
-4. Il se déplace jusqu'à une position connue.
-5. Il effectue éventuellement une correction de position.
-6. Le bras exécute une trajectoire prédéfinie.
-7. La pince attrape la boîte.
-8. Volp-E peut ensuite la déplacer.
-
-Cette approche permet de segmenter le problème en plusieurs tâches simples.
-
-## Architecture électronique
-
-### Raspberry Pi 3 A+
-
-Responsabilités envisagées :
-
-- caméra ;
-- vision par ordinateur ;
-- interface graphique ;
-- visage ;
-- logique principale ;
-- comportement ;
-- communication avec les autres modules.
-
-### Google Coral USB Accelerator
-
-Le Coral est utilisé pour accélérer certaines opérations liées à la vision ou à l'intelligence artificielle.
-
-### Arduino Uno
-
-Responsabilités envisagées :
-
-- contrôle des servomoteurs ;
-- contrôle moteur ;
-- tâches temps réel ;
-- exécution des commandes reçues du Raspberry Pi.
-
-L'idée générale est de séparer clairement la réflexion et l'action :
-
-```text
-Le Raspberry Pi décide.
-L'Arduino exécute.
-```
-
-## Matériel envisagé
-
-Matériel actuellement disponible :
-
-- 6 x MG996R ;
-- 1 x petit servo SMS2309S ;
-- 1 x TT Motor 2025 3-18.
-
-Pour le premier montage :
-
-- tête : 2 x MG996R ;
-- bras : 4 x MG996R.
-
-Les moteurs destinés aux roues seront achetés dans une seconde phase. Pour la locomotion, des moteurs DC avec réducteur seront probablement plus adaptés que des servomoteurs classiques.
-
-## Mobilité
-
-La base mobile n'est pas encore définitivement conçue.
-
-La solution actuellement privilégiée est :
-
-- deux roues motrices ;
-- éventuellement une roulette folle ;
-- moteurs DC avec réducteur.
-
-Les chenilles ont également été envisagées, mais les roues semblent pour l'instant plus simples, compactes et adaptées à la V2.
-
-## Architecture logicielle
-
-Volp-E doit fonctionner avec plusieurs modules relativement indépendants.
-
-```text
-Caméra
-  -> Perception
-  -> Détection de cible
-  -> Décision
-  -> Navigation
-  -> Positionnement
-  -> Bras
-  -> Préhension
-```
-
-Le principe est d'éviter un énorme programme central essayant de tout gérer simultanément. Chaque module possède une responsabilité claire.
-
-Cela permettra également de remplacer plus tard le Raspberry Pi par un ordinateur plus puissant sans reconstruire toute l'architecture logicielle.
+- detection camera via Coral/PyCoral ;
+- mode veille automatique apres 5 minutes sans presence ;
+- client optionnel vers un cerveau externe sur PC.
+- autologin console sur `tty1` pour lancer le visage sans clavier.
 
 ## Installation sur la Raspberry
 
@@ -238,9 +19,9 @@ sudo ./install.sh
 sudo reboot
 ```
 
-## Mise à jour rapide
+## Mise a jour rapide
 
-Quand les paquets système sont déjà installés, utiliser ceci au lieu de `install.sh` :
+Quand les paquets systeme sont deja installes, utiliser ceci au lieu de `install.sh` :
 
 ```bash
 cd ~/volp-e-pi
@@ -269,17 +50,18 @@ curl 'http://127.0.0.1:8765/api/state'
 Sur le PC, lancer :
 
 ```powershell
-cd .\desktop-brain
+cd C:\Users\renau\Documents\Codex\2026-05-20\files-mentioned-by-the-user-visage\volp-e-pi\desktop-brain
 .\start-desktop-brain.ps1
 ```
 
-Le serveur PC écoute sur :
+Le serveur PC ecoute sur :
 
 ```txt
 http://0.0.0.0:8787
 ```
 
 Depuis la Pi, configurer l'adresse IP du PC dans `/etc/default/volp-e`.
+Exemple si le PC est `IP_DU_PC` :
 
 ```bash
 sudo nano /etc/default/volp-e
@@ -288,7 +70,7 @@ sudo nano /etc/default/volp-e
 Mettre :
 
 ```bash
-VOLPE_EXTERNAL_BRAIN_URL=http://YOUR_PC_IP:8787
+VOLPE_EXTERNAL_BRAIN_URL=http://IP_DU_PC:8787
 ```
 
 Puis :
@@ -300,19 +82,17 @@ curl 'http://127.0.0.1:8765/api/analyze_scene'
 curl 'http://127.0.0.1:8765/api/think'
 ```
 
-Le serveur PC sauvegarde la dernière image reçue ici :
+Le serveur PC sauvegarde la derniere image recue ici :
 
 ```txt
 desktop-brain/latest_scene.jpg
 ```
 
-Ces fichiers de debug sont ignorés par Git.
-
-Le cerveau PC répond avec une intention structurée :
+Le cerveau PC repond maintenant avec une intention structuree :
 
 ```json
 {
-  "description": "Présence détectée à distance moyenne. Position: center/center.",
+  "description": "Presence detectee a distance moyenne. Position: center/center.",
   "mood": "curious",
   "suggested_mode": "alert",
   "speech": "Je te vois devant moi.",
@@ -328,50 +108,70 @@ Le cerveau PC répond avec une intention structurée :
 }
 ```
 
-La Pi stocke cette réponse dans `/api/state`, section `thought`, et applique le mode visage conseillé. Quand une présence est détectée, une analyse automatique est déclenchée au maximum toutes les 30 secondes.
+La Pi stocke cette reponse dans `/api/state`, section `thought`, et applique le mode visage conseille. Quand une presence est detectee, une analyse automatique est declenchee au maximum toutes les 30 secondes.
 
-La Pi envoie aussi `face_recent`, `vision_age` et `memory` au cerveau PC. Si une analyse arrive en retard et propose `normal` alors qu'une présence est active, la Pi garde le visage en `alert`.
+La Pi envoie aussi `face_recent`, `vision_age` et `memory` au cerveau PC. Si une analyse arrive en retard et propose `normal` alors qu'une presence est active, la Pi garde le visage en `alert`.
 
-## Mémoire courte
+## Memoire courte
 
-Volp-E garde une mémoire RAM des derniers événements, visible dans `/api/state`, section `memory`.
+Volp-E garde une memoire RAM des derniers evenements, visible dans `/api/state`, section `memory`.
 
 Elle retient notamment :
 
-- arrivée d'une présence ;
-- perte d'une présence ;
-- présence proche ;
-- entrée en veille ;
-- dernière analyse reçue du cerveau PC.
+- arrivee d'une presence ;
+- perte d'une presence ;
+- presence proche ;
+- entree en veille ;
+- derniere analyse recue du cerveau PC.
 
-Cette mémoire ne s'écrit pas en boucle sur la carte SD. Elle sert déjà à calculer une humeur courte (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) et à enrichir les phrases du cerveau PC.
+Cette memoire ne s'ecrit pas en boucle sur la carte SD. Elle sert deja a calculer une humeur courte (`calm`, `curious`, `attentive`, `searching`, `sleepy`, `happy`, `dreaming`) et a enrichir les phrases du cerveau PC.
 
-Elle expose aussi quelques curseurs de personnalité :
+Elle expose aussi quelques curseurs de personnalite :
 
-- `energy` : énergie interne, baisse dans le calme et remonte avec la présence ;
+- `energy` : energie interne, baisse dans le calme et remonte avec la presence ;
 - `curiosity` : monte quand quelque chose attire son attention ;
-- `familiarity` : augmente doucement quand une présence revient souvent ;
+- `familiarity` : augmente doucement quand une presence revient souvent ;
 - `attention` : cible actuelle de son attention (`person`, `person_close`, `searching`, `ambient`, `dream`).
 
-## Personnalité configurable
+## Personnalite configurable
 
-La personnalité de Volp-E se règle dans :
+La personnalite de Volp-E se regle dans :
 
 ```txt
 config/personality.json
 ```
 
-Ce fichier permet d'ajuster son nom, sa prononciation, son ton, ses seuils de présence, ses gains d'humeur, ses préfixes de phrases et les expressions utilisées selon son état.
+Ce fichier pilote deja :
 
-Les expressions visuelles pointent vers les fichiers PNG placés dans :
+- le nom et la prononciation vocale (`name`, `pronunciation`) ;
+- le profil global (`profile`, `description`) ;
+- les curseurs de ton (`warmth`, `curiosity`, `playfulness`, `talkativeness`, etc.) ;
+- les delais de parole et de pensee ;
+- la vitesse a laquelle la memoire courte gagne ou perd energie, curiosite et familiarite ;
+- les seuils d'attention camera ;
+- une premiere table de correspondance pour les futures expressions PNG.
 
-```txt
-face/assets/eyes-png/
+Apres modification sur la Pi :
+
+```bash
+cd ~/volp-e-pi
+sudo ./update.sh
+sudo systemctl restart volpe-brain.service
+curl 'http://127.0.0.1:8765/api/personality'
 ```
 
-Au moment de l'installation, ces PNG sont utilisés avec les variantes pré-calculées dans `face/assets/eyes-rgb565/`, `face/assets/eyes-bgr24/` et `face/assets/eyes-bgrx32/` pour éviter de recalculer l'image à chaque frame sur la Raspberry Pi.
+Apres modification cote PC, redemarrer simplement :
 
-L'objectif est de pouvoir enrichir Volp-E avec de nouveaux regards, clignements et émotions sans modifier le code principal.
+```powershell
+cd desktop-brain
+.\start-desktop-brain.ps1
+```
+
+Le cerveau PC expose aussi :
+
+```txt
+http://127.0.0.1:8787/personality
+```
 
 ## Banque de phrases
 
@@ -381,158 +181,51 @@ Le cerveau PC lit les phrases dans :
 desktop-brain/phrases.json
 ```
 
-Objectif conseillé pour une première vraie personnalité :
+Objectif conseille pour une premiere vraie personnalite :
 
-- `face_close` : 20 phrases quand quelqu'un est très proche ;
-- `face_medium` : 20 phrases quand quelqu'un est devant lui à distance normale ;
-- `face_far` : 15 phrases quand une présence est plus loin ;
-- `no_presence` : 15 phrases quand la scène est calme ;
-- `presence_returned` : 10 phrases quand quelqu'un revient après une courte absence ;
-- `presence_continues` : 10 phrases quand Volp-E suit déjà quelqu'un ;
-- `presence_lost` : 10 phrases quand une présence sort du champ ;
-- `mood_happy` : 10 phrases quand Volp-E est content ou reconnaît une présence familière ;
-- `mood_sleepy` : 10 phrases quand son énergie baisse ;
-- `mood_curious` : 10 phrases quand sa curiosité monte ;
+- `face_close` : 20 phrases quand quelqu'un est tres proche.
+- `face_medium` : 20 phrases quand quelqu'un est devant lui a distance normale.
+- `face_far` : 15 phrases quand une presence est plus loin.
+- `no_presence` : 15 phrases quand la scene est calme.
+- `presence_returned` : 10 phrases quand quelqu'un revient apres une courte absence.
+- `presence_continues` : 10 phrases quand Volp-E suit deja quelqu'un.
+- `presence_lost` : 10 phrases quand une presence sort du champ.
+- `mood_happy` : 10 phrases quand Volp-E est content ou reconnait une presence familiere.
+- `mood_sleepy` : 10 phrases quand son energie baisse.
+- `mood_curious` : 10 phrases quand sa curiosite monte.
 - `description_face` : 10 phrases d'analyse interne avec `{distance_text}`, `{horizontal}`, `{vertical}`.
 
-Pour l'instant, viser des phrases courtes, lisibles en 1 ou 2 lignes sur l'écran. Ton doux, curieux, un peu robot compagnon.
+Pour l'instant, vise des phrases courtes, lisibles en 1 ou 2 lignes sur l'ecran. Ton doux, curieux, un peu robot compagnon.
 
 ## Voix hybride
 
-Quand une phrase est produite par le cerveau PC, la Raspberry Pi demande d'abord une voix plus naturelle au serveur desktop (`/speak`). Si le PC n'est pas disponible, Volp-E utilise `espeak-ng` localement.
+Quand une phrase est recue du cerveau PC, la Pi essaie d'abord de demander une voix plus naturelle au serveur desktop (`/speak`). Si le PC n'est pas joignable, Volp-E parle quand meme avec `espeak-ng` sur la Raspberry.
 
-Sur le PC, le serveur desktop utilise Piper si `desktop-brain/piper/piper.exe` et une voix dans `desktop-brain/voices/` sont présents. Sinon, il peut revenir à la voix Windows.
+Sur le PC, le serveur desktop utilise Piper si `desktop-brain/piper/piper.exe` et la voix `desktop-brain/voices/fr_FR-siwis-medium.onnx` sont presents. Sinon, il tente la voix Windows. Le texte affiche reste intact, mais la synthese vocale remplace `Volp-E` par `Volpi` pour eviter la prononciation `volp eu`.
 
-Le texte affiché reste intact, mais la synthèse vocale remplace `Volp-E` par `Volpi` pour éviter la prononciation `volp eu`.
+Les pensees recues du cerveau externe declenchent automatiquement la voix. La Pi sauvegarde le dernier son recu dans `/tmp/volpe-speech.wav`, puis le joue avec `aplay`, comme le test manuel. Si une autre sortie audio doit etre forcee, ajoute par exemple `VOLPE_APLAY_DEVICE=plughw:1,0` dans `/etc/default/volp-e`, puis redemarre `volpe-brain.service`.
 
-Pour forcer une sortie audio ALSA sur la Raspberry Pi :
+Installation de Piper sur Windows :
 
-```bash
-VOLPE_APLAY_DEVICE=plughw:1,0
+```powershell
+cd desktop-brain
+.\install-piper-windows.ps1
+.\start-desktop-brain.ps1
 ```
 
-Cette variable peut être placée dans `/etc/default/volp-e`, puis appliquée avec :
+Test rapide sur la Pi :
 
 ```bash
-sudo systemctl restart volpe-brain.service
+curl 'http://127.0.0.1:8765/api/say?text=Bonjour%20je%20suis%20Volp-E'
+curl 'http://127.0.0.1:8765/api/state'
+aplay /tmp/volpe-speech.wav
 ```
 
-L'état vocal est visible dans `/api/state`, section `voice`.
+Dans `/api/state`, la section `voice.last_engine` indique `desktop` si le PC a genere la voix, ou `espeak-ng` si la Pi a utilise la voix locale de secours. `voice.last_desktop_engine` indique ensuite `piper` ou `windows-sapi`.
 
-## Volp-E Adventures
+## Prochaines etapes
 
-Une des idées centrales apparues pendant le développement est de transformer Volp-E en interface physique d'un jeu.
-
-Volp-E resterait un robot compagnon autonome, mais une seconde couche existerait : une aventure interactive vécue à travers le robot.
-
-Le joueur pourrait découvrir progressivement une histoire grâce aux interactions avec Volp-E. Le robot pourrait utiliser :
-
-- son écran ;
-- ses yeux ;
-- ses mouvements ;
-- son bras ;
-- ses déplacements ;
-- des sons ;
-- des objets réels ;
-- des indices cachés ;
-- des codes visuels.
-
-Volp-E pourrait :
-
-- afficher mystérieusement un symbole ;
-- regarder régulièrement vers un endroit particulier ;
-- demander qu'on lui apporte un objet ;
-- reconnaître un objet physique appartenant au jeu ;
-- révéler un message après une action ;
-- transporter une petite boîte ;
-- débloquer une nouvelle expression ;
-- débloquer une nouvelle capacité ;
-- lancer une quête ;
-- donner des indices progressivement.
-
-L'objectif serait d'obtenir quelque chose à mi-chemin entre robot compagnon, jeu narratif et objet interactif réel.
-
-## Roadmap
-
-### Phase 1 - Prototype mécanique
-
-- [ ] Finaliser la nouvelle tête
-- [ ] Finaliser le pan/tilt
-- [ ] Tester le poids et l'équilibrage
-- [ ] Monter les servos
-- [ ] Concevoir le bras
-- [ ] Tester la pince
-
-### Phase 2 - Expression
-
-- [x] Créer les premiers yeux PNG
-- [x] Ajouter le clignement
-- [x] Ajouter le suivi du regard
-- [ ] Synchroniser regard et tête
-- [ ] Créer plusieurs expressions
-
-### Phase 3 - Vision
-
-- [x] Détection d'une personne
-- [x] Suivi d'une personne
-- [ ] Détection d'un objet prédéfini
-- [ ] Estimation de la position de la cible
-
-### Phase 4 - Manipulation
-
-- [ ] Programmer les mouvements du bras
-- [ ] Définir une position de préhension
-- [ ] Attraper une boîte prédéfinie
-- [ ] Lever l'objet
-- [ ] Déplacer l'objet
-
-### Phase 5 - Mobilité
-
-- [ ] Choisir les moteurs
-- [ ] Concevoir la base
-- [ ] Installer les roues
-- [ ] Contrôler les moteurs avec l'Arduino
-- [ ] Navigation vers une cible
-- [ ] Positionnement devant un objet
-
-### Phase 6 - Volp-E Adventures
-
-- [ ] Définir l'univers
-- [ ] Définir le système de progression
-- [ ] Créer une première quête
-- [ ] Ajouter des objets physiques interactifs
-- [ ] Ajouter les premiers événements narratifs
-
-## Documentation
-
-Le développement de Volp-E sera progressivement documenté.
-
-Supports envisagés :
-
-- GitHub ;
-- vidéos ;
-- photos des prototypes ;
-- modèles 3D ;
-- fichiers STL ;
-- code source ;
-- schémas électroniques ;
-- journal de développement.
-
-Un carnet de bord est disponible ici :
-
-- [docs/carnet-de-bord.md](docs/carnet-de-bord.md)
-
-L'objectif est de conserver une trace de chaque évolution du robot et de pouvoir suivre son développement de version en version.
-
-## Philosophie
-
-Volp-E est construit progressivement.
-
-Chaque limitation peut devenir une idée. Chaque prototype peut apporter quelque chose à la version suivante.
-
-Le but n'est pas de fabriquer immédiatement le robot parfait. Le but est de construire un robot un peu plus vivant à chaque version.
-
-## Licence
-
-Ce projet est actuellement distribué sous licence MIT.
-Volp-E Adventures, l’univers narratif, les personnages, logos et éléments de jeu ne sont pas couverts par la licence MIT du code
+- brancher une vraie analyse image cote PC ;
+- remplacer la voix desktop basique par une voix TTS plus naturelle ;
+- ajouter Arduino Uno en liaison serie pour tete, bras et roues ;
+- transformer la detection visage en consignes pan/tilt.

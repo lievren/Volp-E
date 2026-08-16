@@ -12,16 +12,10 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "[Volp-E] Installing packages..."
 apt-get update
-apt-get install -y python3 python3-opencv python3-picamera2 xserver-xorg xinit unclutter rsync curl espeak-ng alsa-utils
+apt-get install -y python3 python3-opencv python3-picamera2 rsync curl espeak-ng alsa-utils
 
 if apt-cache show python3-pycoral >/dev/null 2>&1; then
   apt-get install -y python3-pycoral
-fi
-
-if apt-cache show chromium-browser >/dev/null 2>&1; then
-  apt-get install -y chromium-browser
-else
-  apt-get install -y chromium
 fi
 
 echo "[Volp-E] Copying app to ${APP_DIR}..."
@@ -31,7 +25,6 @@ rsync -a --delete \
   --exclude 'models/*.tflite' \
   "$SOURCE_DIR/" "$APP_DIR/"
 
-chmod +x "$APP_DIR/bin/start-face.sh"
 chmod +x "$APP_DIR/bin/start-face-fb.sh"
 chmod +x "$APP_DIR/bin/start-vision.sh"
 chmod +x "$APP_DIR/update.sh"
@@ -46,7 +39,7 @@ echo "[Volp-E] Installing systemd services..."
 if [ ! -f /etc/default/volp-e ]; then
   cat > /etc/default/volp-e <<'DEFAULTS'
 # Optional desktop brain URL, for example:
-# VOLPE_EXTERNAL_BRAIN_URL=http://YOUR_PC_IP:8787
+# VOLPE_EXTERNAL_BRAIN_URL=http://IP_DU_PC:8787
 VOLPE_EXTERNAL_BRAIN_URL=
 DEFAULTS
 fi
@@ -54,7 +47,6 @@ fi
 cp "$APP_DIR/systemd/volpe-brain.service" /etc/systemd/system/volpe-brain.service
 cp "$APP_DIR/systemd/volpe-vision.service" /etc/systemd/system/volpe-vision.service
 cp "$APP_DIR/systemd/volpe-face-fb.service" /etc/systemd/system/volpe-face-fb.service
-cp "$APP_DIR/systemd/volpe-face.service" "/etc/systemd/system/volpe-face@.service"
 sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-brain.service
 sed -i "s/^User=.*/User=${APP_USER}/" /etc/systemd/system/volpe-vision.service
 
@@ -62,6 +54,10 @@ systemctl daemon-reload
 systemctl enable volpe-brain.service
 systemctl enable volpe-vision.service
 systemctl enable volpe-face-fb.service
+systemctl stop volpe-face-svg.service >/dev/null 2>&1 || true
+systemctl disable volpe-face-svg.service >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/volpe-face-svg.service
+rm -f /etc/systemd/system/volpe-face@.service
 systemctl disable "volpe-face@${APP_USER}.service" >/dev/null 2>&1 || true
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 systemctl set-default multi-user.target

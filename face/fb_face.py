@@ -35,6 +35,29 @@ EYE_FRAME_NAMES = {
     "down_right": "regard_bas_droite.raw",
 }
 
+FACE_V2_DIR = Path(__file__).resolve().parent / "assets" / "face-v2-layers"
+FACE_V2_REQUIRED = ("brows_neutral", "eyes_neutral", "mouth_neutral")
+FACE_V2_LAYOUT = {
+    "brows": (0.50, 0.20, 0.82),
+    "eyes": (0.50, 0.45, 0.72),
+    "mouth": (0.50, 0.78, 0.56),
+}
+FACE_V2_MOUTH_FRAMES = (
+    "mouth_neutral",
+    "mouth_open1",
+    "mouth_open2",
+    "mouth_open3",
+    "mouth_open2",
+    "mouth_open1",
+)
+FACE_V2_MOODS = {
+    "normal": ("brows_neutral", "mouth_neutral"),
+    "curious": ("brows_curious", "mouth_curious"),
+    "sleepy": ("brows_sleepy", "mouth_sleepy"),
+    "sad": ("brows_sad", "mouth_sad"),
+    "happy": ("brows_happy", "mouth_happy"),
+}
+
 FONT = {
     " ": ["000", "000", "000", "000", "000", "000", "000"],
     ".": ["0", "0", "0", "0", "0", "0", "1"],
@@ -162,11 +185,48 @@ class Canvas:
         self.buffer[start:start + self.bytes_per_pixel] = data
 
     def put_cached(self, x, y, data):
+        if x < 0 or y < 0 or x >= self.width or y >= self.height:
+            return
         if ROTATE_180:
             x = self.width - 1 - x
             y = self.height - 1 - y
         start = y * self.stride + x * self.bytes_per_pixel
         self.buffer[start:start + self.bytes_per_pixel] = data
+
+    def blit_rgba_layer(self, layer, center_x, center_y, target_width):
+        src_w = int(layer.get("width", 0))
+        src_h = int(layer.get("height", 0))
+        pixels = layer.get("pixels", b"")
+        if src_w <= 0 or src_h <= 0 or not pixels:
+            return False
+        scale = max(0.01, float(target_width) / src_w)
+        target_h = max(1, int(round(src_h * scale)))
+        left = int(round(center_x - target_width / 2))
+        top = int(round(center_y - target_h / 2))
+        for dy in range(target_h):
+            y = top + dy
+            if y < 0 or y >= self.height:
+                continue
+            sy = min(src_h - 1, int(dy / scale))
+            row = sy * src_w * 4
+            for dx in range(int(target_width)):
+                x = left + dx
+                if x < 0 or x >= self.width:
+                    continue
+                sx = min(src_w - 1, int(dx / scale))
+                offset = row + sx * 4
+                alpha = pixels[offset + 3]
+                if alpha <= 0:
+                    continue
+                r = pixels[offset]
+                g = pixels[offset + 1]
+                b = pixels[offset + 2]
+                if alpha < 255:
+                    r = (r * alpha) // 255
+                    g = (g * alpha) // 255
+                    b = (b * alpha) // 255
+                self.put(x, y, (r, g, b))
+        return True
 
     def ellipse(self, cx, cy, rx, ry, color, outline=None, outline_width=1):
         x0 = max(0, int(cx - rx - outline_width))
@@ -320,9 +380,20 @@ def draw_standby(canvas, now):
     scale = min(canvas.width, canvas.height)
 
     pulse = 1.0 + math.sin(now * 1.8) * 0.08
-    canvas.ellipse(cx, cy, scale * 0.135 * pulse, scale * 0.135 * pulse, (0, 36, 64))
-    canvas.ellipse(cx, cy, scale * 0.084 * pulse, scale * 0.084 * pulse, (0, 210, 245))
-    canvas.ellipse(cx, cy, scale * 0.034, scale * 0.034, (255, 220, 132))
+    core_outer = scale * 0.125 * pulse
+    core_inner = scale * 0.072 * (1.0 + math.sin(now * 2.25) * 0.05)
+    canvas.ellipse(cx, cy, core_outer, core_outer, (0, 10, 20), (0, 170, 220), 1)
+    canvas.ellipse(cx, cy, core_inner, core_inner, (0, 6, 12), (255, 205, 112), 1)
+    for i in range(16):
+        a = i / 16 * math.pi * 2 + now * 0.35
+        r0 = scale * (0.026 + (i % 3) * 0.008)
+        r1 = scale * (0.052 + (i % 4) * 0.012)
+        x0 = cx + math.cos(a) * r0
+        y0 = cy + math.sin(a) * r0 * 0.42
+        x1 = cx + math.cos(a) * r1
+        y1 = cy + math.sin(a) * r1 * 0.42
+        color = (44, 225, 255) if i % 4 else (255, 215, 128)
+        canvas.line(x0, y0, x1, y1, color)
 
     for ring, speed, tilt, color in (
         (0.22, 0.65, 0.42, (0, 138, 180)),
@@ -371,6 +442,173 @@ def draw_thought(canvas, state):
         draw_text(canvas, line, x, y, (214, 244, 255), scale)
 
 
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def load_face_v2_layers():
+    manifest_path = FACE_V2_DIR / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except OSError:
+        print(f"[Volp-E fb] face v2 assets not found in {FACE_V2_DIR}", flush=True)
+        return {}
+    except json.JSONDecodeError as exc:
+        print(f"[Volp-E fb] face v2 manifest invalid: {exc}", flush=True)
+        return {}
+
+    layers = {}
+    for key, item in manifest.get("layers", {}).items():
+        try:
+            width = int(item["width"])
+            height = int(item["height"])
+            file_name = item.get("file") or f"{key}.rgba"
+            pixels = (FACE_V2_DIR / file_name).read_bytes()
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            print(f"[Volp-E fb] cannot load face layer {key}: {exc}", flush=True)
+            continue
+
+        expected = width * height * 4
+        if len(pixels) != expected:
+            print(f"[Volp-E fb] bad face layer size for {key}: {len(pixels)} != {expected}", flush=True)
+            continue
+        layers[key] = {"width": width, "height": height, "pixels": pixels}
+
+    missing = [key for key in FACE_V2_REQUIRED if key not in layers]
+    if missing:
+        print(f"[Volp-E fb] face v2 missing required layers: {', '.join(missing)}", flush=True)
+        return {}
+
+    print(f"[Volp-E fb] loaded {len(layers)} face v2 layers from {FACE_V2_DIR}", flush=True)
+    return layers
+
+
+def mood_from_state(state):
+    memory = state.get("memory", {}) if isinstance(state, dict) else {}
+    thought = state.get("thought", {}) if isinstance(state, dict) else {}
+    parts = (
+        memory.get("active_mood"),
+        memory.get("mood"),
+        thought.get("mood"),
+        state.get("mode") if isinstance(state, dict) else "",
+    )
+    text = " ".join(str(part or "").lower() for part in parts)
+    if any(word in text for word in ("happy", "content", "joy", "joie")):
+        return "happy"
+    if any(word in text for word in ("sleep", "sleepy", "endormi", "dream", "veille", "standby")):
+        return "sleepy"
+    if any(word in text for word in ("sad", "triste")):
+        return "sad"
+    if any(word in text for word in ("curious", "curieux", "alert", "attentive", "search")):
+        return "curious"
+    return "normal"
+
+
+def choose_face_v2_eye(look_x, look_y, blink_closed, idle_eye_key, face_seen):
+    if blink_closed:
+        return "eyes_blink"
+    if not face_seen:
+        return idle_eye_key
+    if look_y < -0.48:
+        if look_x < -0.25:
+            return "eyes_up_left"
+        if look_x > 0.25:
+            return "eyes_up_right"
+        return "eyes_up"
+    if look_y > 0.48:
+        if look_x < -0.18:
+            return "eyes_down_left"
+        if look_x > 0.18:
+            return "eyes_down_right"
+        return "eyes_down"
+    if look_x < -0.60:
+        return "eyes_left4"
+    if look_x < -0.38:
+        return "eyes_left3"
+    if look_x < -0.20:
+        return "eyes_left2"
+    if look_x < -0.07:
+        return "eyes_left1"
+    if look_x > 0.60:
+        return "eyes_right4"
+    if look_x > 0.38:
+        return "eyes_right3"
+    if look_x > 0.20:
+        return "eyes_right2"
+    if look_x > 0.07:
+        return "eyes_right1"
+    return "eyes_neutral"
+
+
+def random_face_v2_idle_eye(mood):
+    choices = {
+        "normal": ("eyes_neutral", "eyes_left1", "eyes_right1"),
+        "curious": ("eyes_neutral", "eyes_left1", "eyes_left2", "eyes_right1", "eyes_right2", "eyes_up", "eyes_down"),
+        "happy": ("eyes_neutral", "eyes_left1", "eyes_right1", "eyes_up"),
+        "sleepy": ("eyes_neutral", "eyes_down", "eyes_blink"),
+        "sad": ("eyes_down", "eyes_down_left", "eyes_down_right", "eyes_neutral"),
+    }
+    return random.choice(choices.get(mood, choices["normal"]))
+
+
+def face_v2_idle_delay(mood):
+    ranges = {
+        "curious": (0.35, 1.1),
+        "happy": (0.65, 1.5),
+        "sleepy": (1.8, 3.6),
+        "sad": (1.2, 2.8),
+        "normal": (0.9, 2.4),
+    }
+    low, high = ranges.get(mood, ranges["normal"])
+    return random.uniform(low, high)
+
+
+def voice_is_active(state, now):
+    voice = state.get("voice", {}) if isinstance(state, dict) else {}
+    status = str(voice.get("status") or "").lower()
+    if status in ("speaking", "queued", "loading"):
+        return True
+    last_at = safe_float(voice.get("last_at"), 0.0)
+    audio_bytes = safe_float(voice.get("last_audio_bytes"), 0.0)
+    if last_at <= 0 or audio_bytes <= 0:
+        return False
+    duration = clamp(audio_bytes / (22050.0 * 2.0), 0.7, 8.0)
+    return now - last_at < duration + 0.35
+
+
+def choose_face_v2_mouth(state, mood, now):
+    if voice_is_active(state, now):
+        index = int(now * 9.0) % len(FACE_V2_MOUTH_FRAMES)
+        return FACE_V2_MOUTH_FRAMES[index]
+    return FACE_V2_MOODS.get(mood, FACE_V2_MOODS["normal"])[1]
+
+
+def draw_face_v2(canvas, layers, state, now, look_x, look_y, blink_closed, idle_eye_key, face_seen):
+    mood = mood_from_state(state)
+    brows_key = FACE_V2_MOODS.get(mood, FACE_V2_MOODS["normal"])[0]
+    eyes_key = choose_face_v2_eye(look_x, look_y, blink_closed, idle_eye_key, face_seen)
+    mouth_key = choose_face_v2_mouth(state, mood, now)
+    fallback = {
+        "brows": "brows_neutral",
+        "eyes": "eyes_neutral",
+        "mouth": "mouth_neutral",
+    }
+    for slot, key in (("brows", brows_key), ("eyes", eyes_key), ("mouth", mouth_key)):
+        layer = layers.get(key) or layers.get(fallback[slot])
+        if not layer:
+            continue
+        x_ratio, y_ratio, width_ratio = FACE_V2_LAYOUT[slot]
+        canvas.blit_rgba_layer(
+            layer,
+            int(canvas.width * x_ratio),
+            int(canvas.height * y_ratio),
+            int(canvas.width * width_ratio),
+        )
+
+
 def load_eye_frames(width, height, bpp):
     root = RAW_EYE_DIRS.get(bpp)
     if root is None:
@@ -417,14 +655,17 @@ def main():
     width, height, bpp, stride = framebuffer_info()
     canvas = Canvas(width, height, bpp, stride)
     eye_frames = load_eye_frames(width, height, bpp)
+    face_v2_layers = load_face_v2_layers()
     last_state = {"mode": "normal", "vision": {"face": False, "x": 0.0, "y": 0.0}}
     target_x = 0.0
     target_y = 0.0
     look_x = 0.0
     look_y = 0.0
     next_random = 0.0
+    idle_eye_key = "eyes_neutral"
+    next_idle_eye = 0.0
     next_state_poll = 0.0
-    next_blink = time.time() + random.uniform(2.8, 6.5)
+    next_blink = time.time() + random.uniform(2.0, 5.0)
     blink_until = 0.0
     print(f"[Volp-E fb] framebuffer {width}x{height} {bpp}bpp stride={stride}", flush=True)
 
@@ -436,16 +677,18 @@ def main():
                 next_state_poll = now + STATE_POLL_INTERVAL
             state = last_state
             mode = state.get("mode", "normal")
+            mood = mood_from_state(state)
             vision = state.get("vision", {})
             face_seen = bool(vision.get("face"))
             if face_seen:
-                target_x = clamp(float(vision.get("x", 0.0) or 0.0), -1.0, 1.0)
-                target_y = clamp(float(vision.get("y", 0.0) or 0.0), -1.0, 1.0)
+                target_x = clamp(safe_float(vision.get("x", 0.0), 0.0), -1.0, 1.0)
+                target_y = clamp(safe_float(vision.get("y", 0.0), 0.0), -1.0, 1.0)
             elif now >= next_random:
-                spread = 0.78 if mode == "alert" else 0.48
+                lively = mode == "alert" or mood in ("curious", "happy")
+                spread = 0.78 if lively else 0.48
                 target_x = random.uniform(-spread, spread)
                 target_y = random.uniform(-spread * 0.68, spread * 0.68)
-                next_random = now + (0.35 if mode == "alert" else 1.1)
+                next_random = now + (0.35 if lively else 1.1)
 
             if face_seen:
                 ease = 0.34 if mode == "alert" else 0.28
@@ -454,14 +697,32 @@ def main():
             look_x += (target_x - look_x) * ease
             look_y += (target_y - look_y) * ease
 
+            if face_seen:
+                idle_eye_key = "eyes_neutral"
+            elif face_v2_layers and now >= next_idle_eye:
+                idle_eye_key = random_face_v2_idle_eye(mood)
+                next_idle_eye = now + face_v2_idle_delay(mood)
+
             if mode != "standby" and now >= next_blink:
-                blink_until = now + random.uniform(0.10, 0.16)
-                next_blink = now + random.uniform(3.0, 7.5)
+                blink_until = now + random.uniform(0.055, 0.085)
+                next_blink = now + random.uniform(2.2, 5.4)
             blink_closed = now < blink_until
 
             canvas.clear()
             if mode == "standby":
                 draw_standby(canvas, now)
+            elif face_v2_layers:
+                draw_face_v2(
+                    canvas,
+                    face_v2_layers,
+                    state,
+                    now,
+                    look_x,
+                    look_y,
+                    blink_closed,
+                    idle_eye_key,
+                    face_seen,
+                )
             else:
                 frame = choose_eye_frame(eye_frames, mode, look_x, look_y, blink_closed)
                 if not frame or not canvas.blit_raw_frame(frame):

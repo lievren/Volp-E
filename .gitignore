@@ -1,41 +1,62 @@
+# ==========================================
+# Volp-E - fichiers locaux / générés
+# ==========================================
+
 # Python
 __pycache__/
 *.py[cod]
-.venv/
-venv/
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
 
-# Runtime/debug captures
+# Environnements Python
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+
+# Fichiers temporaires / backups
+*.backup
+*.bak
+*.tmp
+*.swp
+*~
+
+# Desktop brain - données générées
 desktop-brain/latest_scene.jpg
 desktop-brain/latest_scene.json
 desktop-brain/latest_speech.wav
-vision/*.jpg
-vision/*.jpeg
-vision/*.png
-*.log
-*.tmp
-*.wav
 
-# Local models and generated packages
-models/*.tflite
+# Piper runtime
 desktop-brain/piper/
-desktop-brain/voices/
-*.onnx
-*.onnx.json
-*.tar.gz
-*.zip
 
-# Local experiments kept out of the public release
-bin/start-svg-face.sh
-face/svg-eyes.html
-face/assets/eyes/
-systemd/volpe-face-svg.service
+# Modèles vocaux téléchargés localement
+desktop-brain/voices/*.onnx
 
-# Local machine config
+# Variables d'environnement / secrets
 .env
-config.local
+.env.*
+!.env.example
 
-# OS/editor
-.DS_Store
-Thumbs.db
+# Secrets / clés / certificats
+*.key
+*.pem
+*.p12
+*.pfx
+
+# IDE
 .vscode/
 .idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Linux
+*~

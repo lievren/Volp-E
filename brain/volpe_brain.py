@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import io
 import json
 import mimetypes
 import os
@@ -7,6 +8,7 @@ import re
 import subprocess
 import threading
 import time
+import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -30,11 +32,13 @@ DEFAULT_PERSONALITY = {
         "enabled": True,
         "min_interval_seconds": 4.0,
         "think_cooldown_seconds": 12.0,
+        "voice_gain": 0.5,
     },
     "memory": {
         "max_events": 24,
         "recent_seconds": 600,
         "standby_after_seconds": 300,
+        "sleepy_after_seconds": 600,
         "close_face_size": 0.70,
         "presence_energy_gain": 0.10,
         "presence_curiosity_gain": 0.12,
@@ -96,12 +100,14 @@ def personality_int(section, key, default):
 
 PERSONALITY = load_personality()
 STANDBY_AFTER_SECONDS = personality_float("memory", "standby_after_seconds", 300)
+SLEEPY_AFTER_SECONDS = personality_float("memory", "sleepy_after_seconds", 600)
 EXTERNAL_BRAIN_URL = os.environ.get("VOLPE_EXTERNAL_BRAIN_URL", "").rstrip("/")
 EXTERNAL_CHECK_INTERVAL = 10
 EXTERNAL_TIMEOUT = 1.5
 EXTERNAL_TTS_TIMEOUT = 6.0
 THINK_COOLDOWN_SECONDS = personality_float("speech", "think_cooldown_seconds", 12)
 SPEECH_MIN_INTERVAL_SECONDS = personality_float("speech", "min_interval_seconds", 4)
+VOICE_GAIN = max(0.0, min(1.0, personality_float("speech", "voice_gain", 0.5)))
 SPEECH_WAV_PATH = Path("/tmp/volpe-speech.wav")
 APLAY_DEVICE = os.environ.get("VOLPE_APLAY_DEVICE", "").strip()
 MEMORY_MAX_EVENTS = personality_int("memory", "max_events", 24)
@@ -143,6 +149,7 @@ STATE = {
         "last_seen": 0.0,
     },
     "standby_after": STANDBY_AFTER_SECONDS,
+    "sleepy_after": SLEEPY_AFTER_SECONDS,
     "no_presence_since": STARTED_AT,
     "personality": {
         "name": PERSONALITY.get("name", "Volp-E"),
@@ -181,6 +188,7 @@ STATE = {
         "last_desktop_engine": "",
         "last_audio_path": "",
         "last_audio_bytes": 0,
+        "volume_gain": VOICE_GAIN,
         "last_command": "",
         "last_result": "",
         "last_error": "",
@@ -316,7 +324,7 @@ class VolpeHandler(BaseHTTPRequestHandler):
                         self.remember("presence_close", "Une presence est proche de moi.", x=STATE["vision"]["x"], y=STATE["vision"]["y"], size=STATE["vision"]["size"])
             elif was_face and now - float(STATE["memory"].get("last_presence_lost_at") or 0.0) > 5:
                 self.remember("presence_lost", "La presence vient de disparaitre du champ.")
-            if face and STATE["mode"] != "sleepy":
+            if face:
                 STATE["mode"] = "alert"
             elif not face and STATE["mode"] == "alert":
                 STATE["mode"] = "normal"
@@ -409,6 +417,10 @@ class VolpeHandler(BaseHTTPRequestHandler):
             energy -= MEMORY_STANDBY_ENERGY_LOSS_PER_SECOND * dt
             curiosity -= MEMORY_STANDBY_CURIOSITY_LOSS_PER_SECOND * dt
             attention = "dream"
+        elif STATE["mode"] == "sleepy" or idle_for >= SLEEPY_AFTER_SECONDS:
+            energy -= MEMORY_AMBIENT_ENERGY_LOSS * dt * 0.55
+            curiosity -= MEMORY_AMBIENT_CURIOSITY_LOSS * dt * 0.55
+            attention = "resting"
         elif last_lost and now - last_lost < 45:
             energy += MEMORY_SEARCHING_ENERGY_GAIN * dt
             curiosity += MEMORY_SEARCHING_CURIOSITY_GAIN * dt
@@ -429,6 +441,9 @@ class VolpeHandler(BaseHTTPRequestHandler):
         if STATE["mode"] == "standby" or idle_for >= STANDBY_AFTER_SECONDS:
             mood = "dreaming" if energy < 0.45 else "calm"
             summary = "Je suis en veille et je garde une trace calme de ce qui m'entoure."
+        elif STATE["mode"] == "sleepy" or idle_for >= SLEEPY_AFTER_SECONDS:
+            mood = "sleepy"
+            summary = "Je suis endormi, mais je reste doucement a l'ecoute."
         elif face and now - last_close < 20:
             mood = "happy" if familiarity >= 0.35 and curiosity >= 0.60 else "attentive"
             summary = "Une presence proche retient mon attention."
@@ -622,6 +637,7 @@ class VolpeHandler(BaseHTTPRequestHandler):
                 print(f"[Volp-E voice] requesting desktop voice: {cls.external_speak_url()}", flush=True)
                 audio, desktop_engine = cls.request_external_speech(text)
                 if audio:
+                    audio = cls.apply_wav_gain(audio, VOICE_GAIN)
                     SPEECH_WAV_PATH.write_bytes(audio)
                     print(f"[Volp-E voice] desktop audio received: engine={desktop_engine}, bytes={len(audio)}, file={SPEECH_WAV_PATH}", flush=True)
                     cls.play_wav(SPEECH_WAV_PATH)
@@ -685,13 +701,56 @@ class VolpeHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def speak_espeak(text):
-        command = ["espeak-ng", "-v", "fr", text]
+        amplitude = max(1, min(200, int(round(100 * VOICE_GAIN))))
+        command = ["espeak-ng", "-v", "fr", "-a", str(amplitude), text]
         STATE["voice"]["last_command"] = " ".join(command)
         result = subprocess.run(command, capture_output=True, text=True, timeout=12)
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "espeak-ng failed").strip()
             raise RuntimeError(f"espeak-ng failed: {detail}")
         STATE["voice"]["last_result"] = (result.stderr or result.stdout or "espeak-ng ok").strip()
+
+    @staticmethod
+    def apply_wav_gain(audio, gain):
+        """Reduce PCM WAV amplitude without changing the system mixer volume."""
+        if gain >= 0.999:
+            return audio
+        try:
+            source = wave.open(io.BytesIO(audio), "rb")
+            try:
+                params = source.getparams()
+                raw = bytearray(source.readframes(source.getnframes()))
+            finally:
+                source.close()
+
+            if params.comptype != "NONE" or params.sampwidth not in (1, 2, 3, 4):
+                return audio
+
+            width = params.sampwidth
+            for offset in range(0, len(raw) - width + 1, width):
+                chunk = raw[offset:offset + width]
+                if width == 1:
+                    sample = chunk[0] - 128
+                    scaled = int(round(sample * gain)) + 128
+                    raw[offset] = max(0, min(255, scaled))
+                else:
+                    sample = int.from_bytes(chunk, "little", signed=True)
+                    scaled = int(round(sample * gain))
+                    limits = 8 * width - 1
+                    scaled = max(-(1 << limits), min((1 << limits) - 1, scaled))
+                    raw[offset:offset + width] = scaled.to_bytes(width, "little", signed=True)
+
+            output = io.BytesIO()
+            destination = wave.open(output, "wb")
+            try:
+                destination.setparams(params)
+                destination.writeframes(raw)
+            finally:
+                destination.close()
+            return output.getvalue()
+        except Exception as exc:
+            print(f"[Volp-E voice] could not apply gain: {exc}", flush=True)
+            return audio
 
     @staticmethod
     def capture_frame():
@@ -753,8 +812,14 @@ class VolpeHandler(BaseHTTPRequestHandler):
         if STATE["vision"]["face"]:
             return
         idle_for = now - STATE["no_presence_since"]
-        if idle_for >= STANDBY_AFTER_SECONDS and STATE["mode"] not in {"sleepy", "standby"}:
+        if idle_for >= STANDBY_AFTER_SECONDS:
+            if STATE["mode"] != "standby":
+                VolpeHandler.remember("standby_entered", "Je passe en veille apres une longue periode calme.")
             STATE["mode"] = "standby"
+        elif idle_for >= SLEEPY_AFTER_SECONDS:
+            STATE["mode"] = "sleepy"
+        elif STATE["mode"] in {"sleepy", "standby"}:
+            STATE["mode"] = "normal"
 
     def serve_static(self, request_path, head_only=False):
         relative = request_path.lstrip("/") or "index.html"

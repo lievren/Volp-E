@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "layers": {
+    "brows_neutral": {
+      "file": "brows_neutral.rgba",
+      "png": "../face-v2-png/brows_neutral.png",
+      "width": 313,
+      "height": 44,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Visage Neutre\\Sourcils Neutre.png"
+    },
+    "eyes_neutral": {
+      "file": "eyes_neutral.rgba",
+      "png": "../face-v2-png/eyes_neutral.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Visage Neutre\\Regard Neutre.png"
+    },
+    "mouth_neutral": {
+      "file": "mouth_neutral.rgba",
+      "png": "../face-v2-png/mouth_neutral.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Visage Neutre\\Bouche Neutre.png"
+    },
+    "eyes_blink": {
+      "file": "eyes_blink.rgba",
+      "png": "../face-v2-png/eyes_blink.png",
+      "width": 265,
+      "height": 38,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Clignement\\Clignement.png"
+    },
+    "brows_curious": {
+      "file": "brows_curious.rgba",
+      "png": "../face-v2-png/brows_curious.png",
+      "width": 302,
+      "height": 57,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeur Sourcils\\Sourcils Curieux.png"
+    },
+    "brows_sleepy": {
+      "file": "brows_sleepy.rgba",
+      "png": "../face-v2-png/brows_sleepy.png",
+      "width": 302,
+      "height": 57,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeur Sourcils\\Sourclis Endormi.png"
+    },
+    "brows_sad": {
+      "file": "brows_sad.rgba",
+      "png": "../face-v2-png/brows_sad.png",
+      "width": 302,
+      "height": 57,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeur Sourcils\\Sourcils Triste.png"
+    },
+    "brows_happy": {
+      "file": "brows_happy.rgba",
+      "png": "../face-v2-png/brows_happy.png",
+      "width": 302,
+      "height": 57,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeur Sourcils\\Sourcils Content.png"
+    },
+    "mouth_curious": {
+      "file": "mouth_curious.rgba",
+      "png": "../face-v2-png/mouth_curious.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeurs Bouche\\Bouche Curieux.png"
+    },
+    "mouth_sleepy": {
+      "file": "mouth_sleepy.rgba",
+      "png": "../face-v2-png/mouth_sleepy.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeurs Bouche\\Bouche Endormi.png"
+    },
+    "mouth_sad": {
+      "file": "mouth_sad.rgba",
+      "png": "../face-v2-png/mouth_sad.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeurs Bouche\\Bouche Triste.png"
+    },
+    "mouth_happy": {
+      "file": "mouth_happy.rgba",
+      "png": "../face-v2-png/mouth_happy.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Humeurs Bouche\\Bouche Content.png"
+    },
+    "mouth_open1": {
+      "file": "mouth_open1.rgba",
+      "png": "../face-v2-png/mouth_open1.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Bouche Ouvert 1\\Bouche ouvert 1.png"
+    },
+    "mouth_open2": {
+      "file": "mouth_open2.rgba",
+      "png": "../face-v2-png/mouth_open2.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Bouche Ouvert 2\\Bouche Ouvert 2.png"
+    },
+    "mouth_open3": {
+      "file": "mouth_open3.rgba",
+      "png": "../face-v2-png/mouth_open3.png",
+      "width": 208,
+      "height": 45,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Bouche Ouvert 3\\Bouche Ouvert 3.png"
+    },
+    "eyes_right1": {
+      "file": "eyes_right1.rgba",
+      "png": "../face-v2-png/eyes_right1.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Droite 1.png"
+    },
+    "eyes_right2": {
+      "file": "eyes_right2.rgba",
+      "png": "../face-v2-png/eyes_right2.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Droite 2.png"
+    },
+    "eyes_right3": {
+      "file": "eyes_right3.rgba",
+      "png": "../face-v2-png/eyes_right3.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Droite 3.png"
+    },
+    "eyes_right4": {
+      "file": "eyes_right4.rgba",
+      "png": "../face-v2-png/eyes_right4.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Droite 4.png"
+    },
+    "eyes_left1": {
+      "file": "eyes_left1.rgba",
+      "png": "../face-v2-png/eyes_left1.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Gauche 1.png"
+    },
+    "eyes_left2": {
+      "file": "eyes_left2.rgba",
+      "png": "../face-v2-png/eyes_left2.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Gauche 2.png"
+    },
+    "eyes_left3": {
+      "file": "eyes_left3.rgba",
+      "png": "../face-v2-png/eyes_left3.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Gauche 3.png"
+    },
+    "eyes_left4": {
+      "file": "eyes_left4.rgba",
+      "png": "../face-v2-png/eyes_left4.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Gauche 4.png"
+    },
+    "eyes_up": {
+      "file": "eyes_up.rgba",
+      "png": "../face-v2-png/eyes_up.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Haut.png"
+    },
+    "eyes_down": {
+      "file": "eyes_down.rgba",
+      "png": "../face-v2-png/eyes_down.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Bas.png"
+    },
+    "eyes_up_right": {
+      "file": "eyes_up_right.rgba",
+      "png": "../face-v2-png/eyes_up_right.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Haut Droite.png"
+    },
+    "eyes_up_left": {
+      "file": "eyes_up_left.rgba",
+      "png": "../face-v2-png/eyes_up_left.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Haut Gauche.png"
+    },
+    "eyes_down_right": {
+      "file": "eyes_down_right.rgba",
+      "png": "../face-v2-png/eyes_down_right.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Bas Droite.png"
+    },
+    "eyes_down_left": {
+      "file": "eyes_down_left.rgba",
+      "png": "../face-v2-png/eyes_down_left.png",
+      "width": 265,
+      "height": 94,
+      "source": "C:\\Users\\renau\\OneDrive\\Documents\\Projets 3D\\PROJET Volp-E\\Visage\\V1.11\\Nouveau Visage -fixe-\\Visage fixe v2\\Regards\\Regard Bas Gauche.png"
+    }
+  }
+}

@@ -16,6 +16,7 @@
     "enabled": true,
     "min_interval_seconds": 4.0,
     "think_cooldown_seconds": 12.0,
+    "voice_gain": 0.5,
     "prefix_chance": 0.18,
     "prefixes": {
       "happy": ["Ah.", "Tiens."],
@@ -29,6 +30,7 @@
     "max_events": 24,
     "recent_seconds": 600,
     "standby_after_seconds": 300,
+    "sleepy_after_seconds": 600,
     "close_face_size": 0.70,
     "presence_energy_gain": 0.10,
     "presence_curiosity_gain": 0.12,
