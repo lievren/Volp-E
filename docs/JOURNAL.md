@@ -194,3 +194,198 @@ Volp-E dispose maintenant de :
 * priorité correcte entre conversation et comportements autonomes ;
 * une chaîne conversationnelle entièrement locale, sans coût par requête.
 
+## 19 août 2026 — Contexte robot, chat texte, maintenance et mémoire persistante
+
+Cette session marque une nouvelle étape importante : Volp-E devient plus cohérent dans ses interactions, gagne une interface de maintenance dédiée et commence à conserver des souvenirs au-delà des redémarrages du Desktop Brain.
+
+### Contexte physique et réponses fiables
+
+* Ajout d'un endpoint `/api/context` sur la Raspberry Pi pour exposer un contexte robot structuré au Desktop Brain.
+* Le contexte comprend notamment :
+  * mode courant ;
+  * état caméra ;
+  * présence détectée ou non ;
+  * distance et position de la personne ;
+  * taille du visage ;
+  * temps écoulé depuis la dernière détection ;
+  * humeur, énergie, curiosité, familiarité et attention ;
+  * résumé mémoire et dernier événement ;
+  * état voix, conversation et Desktop Brain ;
+  * uptime.
+* Transmission du `robot_context` au Desktop Brain lors des échanges Talk.
+* Correction de l'ordre des messages envoyés à Qwen afin que l'état physique actuel soit plus récent et prioritaire sur l'historique conversationnel.
+* Renforcement du prompt pour empêcher le modèle d'inventer ou de contredire les capteurs.
+* Mise en évidence d'une limite du petit modèle Qwen3 1.7B : il pouvait encore répondre l'inverse d'un fait capteur pourtant correct.
+* Ajout d'un mécanisme de **réponses déterministes pour les questions capteur simples**.
+* Les questions comme « Tu me vois ? » ou « Tu détectes quelqu'un ? » sont maintenant résolues directement depuis l'état réel du robot, sans laisser Qwen arbitrer le fait.
+* Validation du comportement :
+  * personne présente → réponse affirmative ;
+  * personne absente → réponse négative.
+* Séparation claire entre faits physiques déterministes et conversation libre générée par le modèle.
+
+### Chat texte dans Talk Control
+
+* Ajout d'un endpoint `/api/chat/text` sur la Raspberry Pi.
+* Le chat texte utilise la même chaîne conversationnelle que Talk :
+  * contexte robot ;
+  * règles de capteurs ;
+  * historique Qwen ;
+  * personnalité ;
+  * synthèse vocale.
+* Ajout d'un champ texte et d'un bouton **SEND** dans la page Talk.
+* Les messages écrits sont transmis au Desktop Brain puis prononcés par Piper comme les réponses vocales.
+* Voix et texte partagent désormais la même conversation logique.
+* Transformation de la zone `TRANSCRIPTION / RESPONSE` en mini historique.
+* Conservation des **5 derniers échanges** dans `localStorage` côté navigateur.
+* Les échanges vocaux et écrits alimentent le même historique visuel.
+
+### Personnalité conversationnelle
+
+* Ajustement du prompt du Desktop Brain pour rendre Volp-E moins neutre et plus naturel.
+* Ajout de règles permettant à Volp-E :
+  * d'avoir de légères préférences personnelles ;
+  * de choisir réellement entre plusieurs options ;
+  * de rester cohérent avec ses avis précédents ;
+  * d'éviter les réponses du type « je préfère rester neutre » lorsqu'aucune neutralité n'est nécessaire.
+* Renforcement de la curiosité :
+  * possibilité de poser de petites questions de suivi ;
+  * questions simples, directement liées au sujet ;
+  * fréquence volontairement modérée pour éviter un effet interrogatoire.
+* Ajout de règles de conversation sociale :
+  * réponses courtes aux salutations et départs ;
+  * réactions naturelles aux phrases comme « je vais manger », « bonne nuit », « à toute » ;
+  * limitation des analyses inutiles sur les échanges banals.
+* Ajout d'exemples concrets au prompt afin d'aider Qwen3 1.7B à mieux suivre le style attendu.
+
+### Page WORK / Maintenance
+
+* Ajout d'une quatrième page **WORK // MAINTENANCE** dans l'application mobile.
+* Ajout d'un quatrième bouton **WORK** sur la page principale, à côté de **Camera**, **Voice Control** et **Talk**.
+* Ajout de trois actions système :
+  * **Restart Brain** ;
+  * **Reboot** ;
+  * **Power Off**.
+* Mise en place de confirmations avant les actions critiques.
+* Ajout d'une règle `sudoers` limitée aux commandes nécessaires, sans donner un accès sudo libre à l'application.
+* Ajout de diagnostics live affichant notamment :
+  * état de la Pi ;
+  * Desktop Brain ;
+  * caméra ;
+  * présence ;
+  * température CPU ;
+  * RAM ;
+  * disque ;
+  * humeur.
+* Ajout d'un endpoint `/api/work/logs`.
+* Ajout d'un **pseudo-terminal de logs** dans la page WORK.
+* Les logs du service `volpe-brain` sont rafraîchis automatiquement environ toutes les 2 secondes.
+* La page WORK devient le cockpit de maintenance et d'observation du robot.
+
+### V0.6a — Mémoire persistante explicite
+
+* Ajout d'un fichier local `desktop-brain/memory.json`.
+* Ajout d'une mémoire longue durée séparée de `CHAT_HISTORY`.
+* La mémoire persistante est :
+  * chargée au démarrage ;
+  * sauvegardée sur disque ;
+  * injectée dans le contexte Qwen ;
+  * plafonnée à 50 souvenirs.
+* Ajout de commandes explicites de mémorisation :
+  * « Souviens-toi que... » ;
+  * « Retiens que... » ;
+  * « Mémorise que... » ;
+  * « N'oublie pas que... » ;
+  * « Garde en mémoire que... ».
+* Les commandes explicites sont interceptées de manière déterministe avant Qwen.
+* Ajout d'un endpoint `/memory` sur le Desktop Brain pour inspecter les souvenirs persistants.
+* Validation de la persistance après redémarrage complet du Desktop Brain.
+* Exemple validé : conservation du jeu préféré de l'utilisateur au-delà d'un redémarrage.
+
+### Séparation utilisateur / Volp-E dans la mémoire
+
+* Correction d'un problème d'attribution des souvenirs où Qwen pouvait interpréter un « mon » utilisateur comme appartenant à Volp-E.
+* Ajout de règles d'identité explicites dans le prompt :
+  * Volp-E est distinct de l'utilisateur ;
+  * un message `user` provient toujours de l'interlocuteur ;
+  * `je`, `moi`, `mon`, `ma`, `mes` dans un message utilisateur désignent l'utilisateur ;
+  * les souvenirs utilisateur ne doivent jamais être attribués à Volp-E.
+* Ajout d'une migration des anciens souvenirs.
+* Les souvenirs sont désormais préfixés explicitement :
+  * `UTILISATEUR : ...`
+  * `VOLP-E : ...`
+  * `GÉNÉRAL : ...`
+* Correction d'un bug d'ordre d'exécution Python dans la migration, puis validation du redémarrage.
+* Validation du comportement :
+  * « Qui est l'utilisateur ? » → Volp-E identifie correctement Renaud et peut citer un souvenir associé ;
+  * les préférences de l'utilisateur ne sont plus automatiquement reprises comme préférences de Volp-E.
+
+### V0.6b — Mémoire semi-automatique
+
+* Ajout d'une mémoire semi-automatique en arrière-plan.
+* Après une réponse normale, un second passage léger de Qwen peut décider si le message utilisateur contient une information durable utile.
+* Le classifieur de mémoire est volontairement conservateur.
+* Les catégories mémorisables comprennent notamment :
+  * identité ;
+  * préférence ;
+  * projet ;
+  * objectif ;
+  * habitude ;
+  * relation ;
+  * fait important.
+* Les éléments temporaires ou triviaux sont filtrés :
+  * salutations ;
+  * départs ;
+  * humeur temporaire ;
+  * actions ponctuelles ;
+  * petites conversations.
+* Ajout d'un seuil de confiance élevé avant écriture en mémoire.
+* L'analyse mémoire tourne dans un thread séparé afin de ne pas ralentir la réponse principale.
+* Les commandes explicites de V0.6a restent prioritaires et permettent toujours de forcer un souvenir.
+* Validation de la chaîne :
+  * conversation normale ;
+  * analyse mémoire ;
+  * écriture dans `memory.json` ;
+  * redémarrage ;
+  * souvenir retrouvé.
+
+### Sauvegarde du soir et GitHub
+
+* Mise en place d'un workflow de fin de session reproductible.
+* Synchronisation des fichiers modifiés de la Raspberry Pi vers la copie fonctionnelle du PC.
+* Conservation du Desktop Brain fonctionnel côté PC comme référence pour les composants Windows.
+* Création d'un snapshot local daté complet du projet.
+* Sauvegarde séparée de la configuration système privée de la Pi :
+  * `/etc/default/volp-e` ;
+  * service `volpe-brain.service` ;
+  * règle sudoers `volpe-work`.
+* Ces fichiers privés restent hors du dépôt GitHub public.
+* Mise à jour du clone GitHub local avec les fichiers validés.
+* Vérification des fichiers suivis avant commit.
+* `memory.json` reste hors du dépôt afin de ne pas publier les souvenirs personnels de Volp-E.
+* Commit et push validés sur `main`.
+* Commit principal de la session :
+  * `f37f66c` — `Add work console and persistent conversational memory`.
+* État final du dépôt :
+  * branche `main` synchronisée avec `origin/main` ;
+  * working tree propre ;
+  * sauvegarde locale et distante terminée.
+
+### État en fin de session
+
+Volp-E dispose maintenant de :
+
+* réponses capteur fiables et déterministes ;
+* contexte physique transmis au cerveau conversationnel ;
+* chat texte intégré à Talk ;
+* historique visuel des 5 derniers échanges ;
+* personnalité plus curieuse, plus sociale et moins neutre ;
+* page WORK dédiée à la maintenance ;
+* redémarrage du cerveau, reboot et extinction depuis le téléphone ;
+* diagnostics live ;
+* pseudo-terminal de logs ;
+* mémoire persistante explicite ;
+* séparation claire entre souvenirs utilisateur et souvenirs de Volp-E ;
+* mémoire semi-automatique en arrière-plan ;
+* sauvegarde du soir structurée ;
+* dépôt GitHub à jour après validation complète de la session.
+
