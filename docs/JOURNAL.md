@@ -389,3 +389,14 @@ Volp-E dispose maintenant de :
 * sauvegarde du soir structurée ;
 * dépôt GitHub à jour après validation complète de la session.
 
+
+### Captures de progression — 19 août 2026
+
+Cockpit mobile principal après l'ajout de la télémétrie, du flux caméra et des quatre espaces **Camera / Voice Control / Talk / Work** :
+
+![Cockpit mobile Volp-E](../assets/images/progress/2026-08-19-control-center.jpeg)
+
+Interface **Talk Control** avec conversation vocale, chat texte et historique des cinq derniers échanges :
+
+![Talk Control Volp-E](../assets/images/progress/2026-08-19-talk-control.jpeg)
+
