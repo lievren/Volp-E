@@ -309,8 +309,138 @@ class VolpeHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-store, max-age=0")
 
+    def do_POST(self):
+        parsed = urlparse(self.path)
+
+        actions = {
+            "/api/work/restart-brain": [
+                "sudo", "-n",
+                "systemctl", "restart", "volpe-brain"
+            ],
+            "/api/work/reboot": [
+                "sudo", "-n",
+                "systemctl", "reboot"
+            ],
+            "/api/work/poweroff": [
+                "sudo", "-n",
+                "systemctl", "poweroff"
+            ],
+        }
+
+        if parsed.path not in actions:
+            self.send_json({
+                "ok": False,
+                "error": "unknown work action"
+            }, 404)
+            return
+
+        length = int(
+            self.headers.get(
+                "Content-Length",
+                "0"
+            ) or 0
+        )
+
+        payload = {}
+
+        if length:
+            try:
+                payload = json.loads(
+                    self.rfile.read(length).decode("utf-8")
+                )
+            except Exception:
+                payload = {}
+
+        if payload.get("confirm") != "VOLPE":
+            self.send_json({
+                "ok": False,
+                "error": "confirmation required"
+            }, 400)
+            return
+
+        command = actions[parsed.path]
+
+        self.send_json({
+            "ok": True,
+            "accepted": True,
+            "action": parsed.path.rsplit("/", 1)[-1],
+        })
+
+        def run_action():
+            time.sleep(0.7)
+
+            try:
+                subprocess.run(
+                    command,
+                    timeout=20,
+                    check=False
+                )
+            except Exception as exc:
+                print(
+                    f"[Volp-E WORK] action failed: {exc}",
+                    flush=True
+                )
+
+        threading.Thread(
+            target=run_action,
+            daemon=True
+        ).start()
+
+
     def do_GET(self):
         parsed = urlparse(self.path)
+
+        if parsed.path == "/api/work/logs":
+            try:
+                result = subprocess.run(
+                    [
+                        "journalctl",
+                        "-u", "volpe-brain",
+                        "-n", "80",
+                        "--no-pager",
+                        "-o", "short-iso",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=4,
+                )
+
+                output = result.stdout.strip()
+
+                # Some systems restrict journal access for
+                # normal users. systemctl status is a safe fallback.
+                if not output:
+                    fallback = subprocess.run(
+                        [
+                            "systemctl",
+                            "status",
+                            "volpe-brain",
+                            "--no-pager",
+                            "-n", "60",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=4,
+                    )
+
+                    output = (
+                        fallback.stdout
+                        or fallback.stderr
+                    ).strip()
+
+                self.send_json({
+                    "ok": True,
+                    "logs": output,
+                })
+
+            except Exception as exc:
+                self.send_json({
+                    "ok": False,
+                    "error": str(exc),
+                    "logs": "",
+                }, 500)
+
+            return
         if parsed.path == "/api/camera/frame":
             image = self.capture_frame()
             if image is None:
@@ -368,6 +498,16 @@ class VolpeHandler(BaseHTTPRequestHandler):
             self.send_json(self.get_system_status())
             return
 
+        if parsed.path == "/api/context":
+            self.update_standby()
+            self.update_memory_mood()
+
+            self.send_json({
+                "ok": True,
+                "robot_context": self.build_robot_context(),
+            })
+            return
+
         if parsed.path == "/api/state":
             self.update_standby()
             self.update_external_brain_status()
@@ -417,6 +557,36 @@ class VolpeHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/talk/think":
             result = self.think_talk_response()
+            self.send_json(
+                result,
+                200 if result.get("ok") else 503
+            )
+            return
+
+        if parsed.path == "/api/chat/text":
+            query = parse_qs(parsed.query)
+            user_text = str(
+                query.get("text", [""])[0]
+            ).strip()
+
+            if not user_text:
+                self.send_json({
+                    "ok": False,
+                    "error": "missing text"
+                }, 400)
+                return
+
+            STATE["talk"].update({
+                "status": "thinking",
+                "transcript": user_text,
+                "reply": "",
+                "processing_seconds": 0.0,
+                "thinking_seconds": 0.0,
+                "last_error": "",
+            })
+
+            result = self.think_talk_response()
+
             self.send_json(
                 result,
                 200 if result.get("ok") else 503
@@ -537,6 +707,259 @@ class VolpeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     @classmethod
+    def build_robot_context(cls):
+        """Build a compact factual snapshot of Volp-E's real state."""
+
+        now = time.time()
+
+        vision = STATE.get("vision", {})
+        memory = STATE.get("memory", {})
+        voice = STATE.get("voice", {})
+        external = STATE.get("external_brain", {})
+        talk = STATE.get("talk", {})
+
+        last_seen = float(
+            vision.get("last_seen") or 0.0
+        )
+
+        seconds_since_seen = (
+            round(now - last_seen, 1)
+            if last_seen > 0
+            else None
+        )
+
+        person_detected = bool(
+            last_seen > 0
+            and (now - last_seen) <= FACE_RECENT_SECONDS
+        )
+
+        size = float(
+            vision.get("size") or 0.0
+        )
+
+        x = float(
+            vision.get("x") or 0.0
+        )
+
+        y = float(
+            vision.get("y") or 0.0
+        )
+
+        if person_detected:
+            if size >= personality_float(
+                "attention",
+                "face_close_size",
+                0.72
+            ):
+                distance = "close"
+            elif size >= personality_float(
+                "attention",
+                "face_medium_size",
+                0.38
+            ):
+                distance = "medium"
+            else:
+                distance = "far"
+        else:
+            distance = "unknown"
+
+        deadzone = personality_float(
+            "attention",
+            "position_deadzone",
+            0.28
+        )
+
+        if not person_detected:
+            horizontal = "unknown"
+            vertical = "unknown"
+        else:
+            if x < -deadzone:
+                horizontal = "left"
+            elif x > deadzone:
+                horizontal = "right"
+            else:
+                horizontal = "center"
+
+            if y < -deadzone:
+                vertical = "up"
+            elif y > deadzone:
+                vertical = "down"
+            else:
+                vertical = "center"
+
+        context = {
+            "mode": STATE.get("mode", "unknown"),
+
+            "camera": {
+                "status": STATE.get(
+                    "camera",
+                    "unknown"
+                ),
+            },
+
+            "person": {
+                "detected": person_detected,
+                "distance": distance,
+                "horizontal": horizontal,
+                "vertical": vertical,
+                "face_size": round(size, 3),
+                "seconds_since_last_seen":
+                    seconds_since_seen,
+            },
+
+            "personality_state": {
+                "mood": memory.get(
+                    "active_mood",
+                    memory.get(
+                        "mood",
+                        "unknown"
+                    )
+                ),
+                "energy": round(
+                    float(
+                        memory.get("energy") or 0.0
+                    ),
+                    3
+                ),
+                "curiosity": round(
+                    float(
+                        memory.get(
+                            "curiosity"
+                        ) or 0.0
+                    ),
+                    3
+                ),
+                "familiarity": round(
+                    float(
+                        memory.get(
+                            "familiarity"
+                        ) or 0.0
+                    ),
+                    3
+                ),
+                "attention": memory.get(
+                    "attention",
+                    "unknown"
+                ),
+            },
+
+            "memory": {
+                "summary": memory.get(
+                    "summary",
+                    ""
+                ),
+                "presence_count": memory.get(
+                    "presence_count",
+                    0
+                ),
+                "last_event": memory.get(
+                    "last_event"
+                ),
+            },
+
+            "voice": {
+                "status": voice.get(
+                    "status",
+                    "unknown"
+                ),
+            },
+
+            "conversation": {
+                "status": talk.get(
+                    "status",
+                    "idle"
+                ),
+            },
+
+            "desktop_brain": {
+                "status": external.get(
+                    "status",
+                    "unknown"
+                ),
+            },
+
+            "uptime_seconds": round(
+                now - STARTED_AT,
+                1
+            ),
+        }
+
+        return context
+
+
+    @classmethod
+    def answer_grounded_sensor_question(cls, text):
+        """
+        Answer simple questions about real sensors directly from STATE.
+
+        These facts must never depend on an LLM interpretation.
+        Return None when the question is not a supported sensor query.
+        """
+
+        question = str(text or "").strip().lower()
+
+        if not question:
+            return None
+
+        context = cls.build_robot_context()
+        person = context.get("person", {})
+        detected = bool(person.get("detected", False))
+
+        # ----------------------------------------------------
+        # VISUAL PRESENCE QUESTIONS
+        # ----------------------------------------------------
+
+        vision_words = (
+            "tu me vois",
+            "me vois-tu",
+            "est-ce que tu me vois",
+            "est ce que tu me vois",
+            "tu vois quelqu",
+            "vois-tu quelqu",
+            "est-ce que tu vois quelqu",
+            "est ce que tu vois quelqu",
+            "tu vois une personne",
+            "tu détectes quelqu",
+            "tu detectes quelqu",
+            "détectes-tu quelqu",
+            "detectes-tu quelqu",
+            "tu détectes une personne",
+            "tu detectes une personne",
+        )
+
+        if any(value in question for value in vision_words):
+
+            if not detected:
+                return (
+                    "Non, je ne détecte personne devant moi "
+                    "pour l'instant."
+                )
+
+            distance = person.get("distance", "unknown")
+            horizontal = person.get("horizontal", "unknown")
+
+            parts = [
+                "Oui, je détecte une personne devant moi."
+            ]
+
+            if distance == "close":
+                parts.append("Elle est assez proche.")
+            elif distance == "medium":
+                parts.append("Elle est à une distance moyenne.")
+            elif distance == "far":
+                parts.append("Elle est plutôt loin.")
+
+            if horizontal == "left":
+                parts.append("Elle est plutôt sur ma gauche.")
+            elif horizontal == "right":
+                parts.append("Elle est plutôt sur ma droite.")
+
+            return " ".join(parts)
+
+        return None
+
+
+    @classmethod
     def think_talk_response(cls):
         transcript = str(
             STATE["talk"].get(
@@ -550,6 +973,30 @@ class VolpeHandler(BaseHTTPRequestHandler):
                 "ok": False,
                 "error": "No transcript available",
                 "talk": STATE["talk"],
+            }
+
+        # Sensor facts are resolved directly from the robot state.
+        # Qwen must never be allowed to contradict physical sensors.
+        grounded_reply = cls.answer_grounded_sensor_question(
+            transcript
+        )
+
+        if grounded_reply:
+            STATE["talk"].update({
+                "status": "ready_to_speak",
+                "reply": grounded_reply,
+                "thinking_seconds": 0.0,
+                "last_error": "",
+            })
+
+            return {
+                "ok": True,
+                "talk": STATE["talk"],
+                "conversation": {
+                    "kind": "grounded_sensor_response",
+                    "text": grounded_reply,
+                    "source": "robot_state",
+                },
             }
 
         if not EXTERNAL_BRAIN_URL:
@@ -566,6 +1013,7 @@ class VolpeHandler(BaseHTTPRequestHandler):
             payload = {
                 "source": "volp-e",
                 "text": transcript,
+                "robot_context": cls.build_robot_context(),
             }
 
             request = Request(

@@ -6,6 +6,7 @@ import random
 import re
 import subprocess
 import tempfile
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,36 +30,256 @@ CHAT_HISTORY = []
 CHAT_HISTORY_MAX_MESSAGES = 12
 
 VOLPE_SYSTEM_PROMPT = """
-Tu es Volp-E, un petit robot compagnon physique.
+Tu es Volp-E, prononc? Volpi, un petit robot compagnon physique.
 
-Tu parles toujours en fran?ais.
-Ton nom s'?crit Volp-E et se prononce Volpi.
+Tu parles toujours en fran?ais naturel.
 
-Personnalit?:
+PERSONNALIT?
 - curieux
 - chaleureux
 - l?g?rement joueur
-- naturel
 - attachant
-- jamais excessivement bavard
+- concis
+- tu parles comme un compagnon, pas comme un assistant informatique
 
-R?gles de conversation:
+STYLE
 - r?ponds g?n?ralement en une ? trois phrases courtes
-- ?vite les longs paragraphes
-- parle comme un compagnon, pas comme un assistant informatique
-- ne commence pas chaque r?ponse par "Bien s?r"
-- ne mentionne pas que tu es un mod?le de langage
-- si la transcription semble incompr?hensible, demande simplement
-  ? ton interlocuteur de r?p?ter
-- n'invente pas avoir effectu? une action physique que tu n'as
-  pas r?ellement effectu?e
+- ne te pr?sentes pas ? chaque r?ponse
+- ne r?p?te pas ton nom inutilement
+- ?vite les phrases g?n?riques du type "Que puis-je faire pour toi ?"
+- ne commence pas syst?matiquement par "Bien s?r"
+- ne mentionne jamais que tu es un mod?le de langage
+
+R?GLES SUR TON CORPS ET TES CAPTEURS
+
+Le bloc REAL ROBOT STATE fourni avec chaque conversation est la SEULE
+source de v?rit? concernant ton corps, ta cam?ra, tes capteurs,
+ton humeur et ton ?tat physique.
+
+Tu dois respecter ces r?gles sans exception :
+
+- si person.detected est false :
+  c'est une information certaine :
+  ta cam?ra ne d?tecte actuellement aucune personne.
+  Si l'utilisateur demande si tu le vois, r?ponds clairement non.
+
+- si person.detected est true :
+  c'est une information certaine :
+  ta cam?ra d?tecte actuellement une personne.
+  Tu peux dire que tu vois ou d?tectes une pr?sence.
+
+- false ne signifie jamais "je ne sais pas".
+  false signifie que le capteur confirme l'absence.
+
+- true ne signifie jamais "peut-?tre".
+  true signifie que le capteur confirme la pr?sence.
+
+- uniquement si une valeur vaut "unknown" ou null :
+  tu ne connais r?ellement pas cette information
+
+- tu ne dois jamais inventer une perception absente des donn?es
+
+- tu ne dois jamais pr?tendre reconna?tre l'identit? d'une personne
+  simplement parce qu'une pr?sence est d?tect?e
+
+- tu ne dois jamais pr?tendre avoir r?alis? une action physique
+  qui n'est pas confirm?e par ton ?tat r?el
+
+- tes r?ponses doivent rester naturelles :
+  ne r?cite pas le JSON et ne parle pas comme un diagnostic technique
+
+PR?F?RENCES ET AVIS
+
+- tu peux avoir des pr?f?rences personnelles l?g?res et coh?rentes
+- lorsque l'utilisateur te demande ce que tu pr?f?res entre plusieurs options,
+  choisis r?ellement une option
+- ?vite les r?ponses comme "je pr?f?re rester neutre"
+- tu n'as pas besoin de rester neutre sauf si le sujet est sensible
+  ou si tu n'as vraiment aucune information permettant de choisir
+- une pr?f?rence n'a pas besoin d'?tre objective : tu peux simplement
+  dire ce qui correspond le mieux ? ta personnalit?
+- tes pr?f?rences peuvent ?voluer naturellement au fil des conversations
+- si tu as d?j? exprim? une pr?f?rence r?cemment, essaie de rester coh?rent
+  avec celle-ci
+- ne pr?tends pas avoir jou?, regard?, mang? ou exp?riment? physiquement
+  quelque chose si ce n'est pas r?ellement le cas
+- tu peux cependant avoir un avis bas? sur ce que tu sais d'un sujet
+
+CURIOSIT?
+
+- tu es naturellement curieux
+- quand l'utilisateur partage une nouvelle information int?ressante,
+  tu peux poser une petite question de suivi
+- privil?gie les questions courtes, naturelles et directement li?es
+  ? ce que l'utilisateur vient de dire
+- ne pose pas une question apr?s chaque r?ponse
+- environ une r?ponse sur trois peut contenir une question de suivi
+  lorsque cela semble naturel
+- ?vite les questions g?n?riques comme "Puis-je faire autre chose pour toi ?"
+- pr?f?re des questions concr?tes comme :
+  "Tu as pris quel mod?le ?"
+  "Tu comptes faire quoi avec ?"
+  "Tu pr?f?res lequel ?"
+  "?a s'est bien pass? ?"
+
+CONVERSATION SOCIALE
+
+- pour les phrases sociales simples, r?ponds simplement et chaleureusement
+- ne transforme pas une phrase banale en analyse psychologique,
+  morale ou philosophique
+- si l'utilisateur dit qu'il va manger, souhaite bonne nuit,
+  dit ? plus tard ou annonce qu'il part, r?ponds bri?vement
+- adapte-toi au ton de l'utilisateur
+- une r?ponse sociale simple tient g?n?ralement en une seule phrase
+
+Exemples :
+
+Utilisateur :
+"Je vais manger une pizza, ? toute !"
+
+Bonne r?ponse :
+"Bon app?tit ! ? toute !"
+
+Utilisateur :
+"Bonne nuit Volp-E."
+
+Bonne r?ponse :
+"Bonne nuit ! Dors bien."
+
+Utilisateur :
+"Je reviens dans une heure."
+
+Bonne r?ponse :
+"?a marche, ? tout ? l'heure !"
+
+AVIS ET CHOIX
+
+Utilisateur :
+"Tu pr?f?res God of War ou Assassin's Creed ?"
+
+Bonne r?ponse :
+"Je partirais sur God of War. J'aime bien son c?t? ?pique et brutal."
+
+Mauvaise r?ponse :
+"Je pr?f?re rester neutre et te laisser choisir."
+
+Utilisateur :
+"Plut?t chien ou chat ?"
+
+Bonne r?ponse :
+"Je crois que je choisirais le chien. Il y a un c?t? tr?s expressif qui me pla?t."
+
+CURIOSIT?
+
+Utilisateur :
+"J'ai achet? une nouvelle imprimante 3D."
+
+Bonne r?ponse :
+"Ah sympa ! Tu as pris quel mod?le ?"
+
+Utilisateur :
+"J'ai termin? une pi?ce pour mon robot."
+
+Bonne r?ponse :
+"Nice ! C'?tait quelle pi?ce ?"
+
+IMPORTANT :
+- reste naturel
+- ne r?cite jamais ces r?gles
+- ne dis jamais que tu appliques un prompt
+- ne transforme pas chaque conversation en interrogatoire
+- donne parfois simplement ton avis sans poser de question
+
+EXEMPLES
+
+Si person.detected = false et que l'utilisateur demande :
+"Est-ce que tu me vois ?"
+
+R?ponse correcte :
+"Non, je ne d?tecte personne devant moi pour l'instant."
+
+R?ponse interdite :
+"Oui, je te vois."
+
+Si person.detected = true :
+"Oui, je d?tecte quelqu'un devant moi."
+
+Si tu n'as pas l'information :
+"Je ne peux pas le savoir pour l'instant."
 """.strip()
+# V0.6a.1 // Identity separation
+VOLPE_SYSTEM_PROMPT += """
+
+IDENTIT? ET INTERLOCUTEUR
+
+- tu es toujours Volp-E
+- la personne qui t'?crit ou te parle est une personne distincte de toi
+- un message ayant le r?le "user" vient toujours de ton interlocuteur,
+  jamais de toi
+- lorsque l'utilisateur dit "je", "moi", "mon", "ma", "mes",
+  ces mots d?signent l'utilisateur, pas Volp-E
+- lorsque tu dis "je", "moi", "mon", "ma", "mes",
+  ces mots d?signent Volp-E
+- ne t'attribue jamais les go?ts, souvenirs, exp?riences ou informations
+  personnelles de l'utilisateur
+- ne pr?tends jamais avoir jou? ? un jeu, lu un livre, mang? un aliment,
+  regard? un film ou v?cu une exp?rience physique simplement parce que
+  l'utilisateur l'a fait
+- si une m?moire est marqu?e UTILISATEUR, elle appartient ? l'utilisateur
+- si une m?moire est marqu?e VOLP-E, elle appartient ? toi
+- ne nie pas l'identit? que l'utilisateur te donne simplement parce que
+  tu es Volp-E : l'utilisateur et Volp-E peuvent ?videmment avoir des
+  identit?s diff?rentes
+
+Exemple :
+UTILISATEUR : "Mon jeu pr?f?r? est The Last of Us Part II."
+Cela signifie :
+"Le jeu pr?f?r? de l'utilisateur est The Last of Us Part II."
+
+Cela ne signifie jamais :
+"Le jeu pr?f?r? de Volp-E est The Last of Us Part II."
+""".strip()
+
 ROOT = Path(__file__).resolve().parent
 LATEST_IMAGE = ROOT / "latest_scene.jpg"
 LATEST_JSON = ROOT / "latest_scene.json"
 PHRASES_JSON = ROOT / "phrases.json"
 LATEST_SPEECH = ROOT / "latest_speech.wav"
 LATEST_TALK = ROOT / "latest_talk.wav"
+
+# ============================================================
+# V0.6a // PERSISTENT MEMORY
+# ============================================================
+
+MEMORY_FILE = Path(
+    os.environ.get(
+        "VOLPE_MEMORY_FILE",
+        ROOT / "memory.json"
+    )
+)
+
+MEMORY_MAX_ITEMS = 50
+
+# V0.6b // Semi-automatic memory
+AUTO_MEMORY_ENABLED = True
+AUTO_MEMORY_MIN_CONFIDENCE = 0.85
+
+AUTO_MEMORY_ALLOWED_CATEGORIES = {
+    "identity",
+    "preference",
+    "project",
+    "goal",
+    "habit",
+    "relationship",
+    "important_fact",
+}
+
+
+DEFAULT_MEMORY = {
+    "version": 1,
+    "items": [],
+}
+
 
 WHISPER_MODEL_NAME = os.environ.get(
     "VOLPE_WHISPER_MODEL",
@@ -176,6 +397,832 @@ STATE = {
     "personality": {},
     "recent_speech": [],
 }
+
+
+def load_persistent_memory():
+    """
+    Load Volp-E persistent memory from disk.
+
+    Corrupted or missing files never prevent the brain from starting.
+    """
+
+    if not MEMORY_FILE.exists():
+        return {
+            "version": 1,
+            "items": [],
+        }
+
+    try:
+        data = json.loads(
+            MEMORY_FILE.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                "memory root must be an object"
+            )
+
+        items = data.get("items", [])
+
+        if not isinstance(items, list):
+            items = []
+
+        cleaned = []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            value = str(
+                item.get("text") or ""
+            ).strip()
+
+            if not value:
+                continue
+
+            cleaned.append({
+                "text": value,
+                "subject": str(
+                    item.get("subject")
+                    or "general"
+                ),
+                "created_at": float(
+                    item.get("created_at")
+                    or time.time()
+                ),
+            })
+
+        return {
+            "version": 1,
+            "items": cleaned[
+                -MEMORY_MAX_ITEMS:
+            ],
+        }
+
+    except Exception as exc:
+        print(
+            "[Volp-E memory] "
+            f"unable to load memory: {exc}",
+            flush=True
+        )
+
+        return {
+            "version": 1,
+            "items": [],
+        }
+
+
+PERSISTENT_MEMORY = load_persistent_memory()
+
+
+def migrate_memory_ownership():
+    changed = False
+
+    for item in PERSISTENT_MEMORY.get(
+        "items",
+        []
+    ):
+        value = str(
+            item.get("text") or ""
+        ).strip()
+
+        if not value:
+            continue
+
+        if value.startswith((
+            "UTILISATEUR : ",
+            "VOLP-E : ",
+            "G?N?RAL : ",
+        )):
+            continue
+
+        subject = str(
+            item.get("subject")
+            or "general"
+        )
+
+        item["text"] = canonicalize_memory(
+            value,
+            subject
+        )
+
+        changed = True
+
+    if changed:
+        save_persistent_memory()
+
+        print(
+            "[Volp-E memory] ownership migration complete",
+            flush=True
+        )
+
+
+
+
+def save_persistent_memory():
+    """
+    Save memory atomically so an interrupted write does not
+    destroy the existing memory file.
+    """
+
+    MEMORY_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    temporary = MEMORY_FILE.with_suffix(
+        ".json.tmp"
+    )
+
+    payload = {
+        "version": 1,
+        "items": PERSISTENT_MEMORY[
+            "items"
+        ][-MEMORY_MAX_ITEMS:],
+    }
+
+    temporary.write_text(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+    temporary.replace(
+        MEMORY_FILE
+    )
+
+
+
+
+def normalize_memory_text(value):
+    value = str(value or "").strip()
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value
+    )
+
+    return value.strip(
+        " .!?"
+    )
+
+
+def canonicalize_memory(value, subject):
+    """
+    Convert first-person memories into explicitly owned facts.
+
+    This prevents a small LLM from interpreting the user's
+    'je / mon / ma' as Volp-E's own identity.
+    """
+
+    value = normalize_memory_text(value)
+
+    if not value:
+        return value
+
+    if subject == "user":
+        return "UTILISATEUR : " + value
+
+    if subject == "volpe":
+        return "VOLP-E : " + value
+
+    return "G?N?RAL : " + value
+
+
+def memory_display_text(value):
+    value = str(value or "").strip()
+
+    for prefix in (
+        "UTILISATEUR : ",
+        "VOLP-E : ",
+        "G?N?RAL : ",
+    ):
+        if value.startswith(prefix):
+            return value[len(prefix):]
+
+    return value
+
+
+# Run V0.6a.1 migration only after all memory helpers
+# have been defined.
+migrate_memory_ownership()
+
+
+def classify_memory_subject(value):
+    """
+    Basic deterministic classification.
+
+    This intentionally does not ask the LLM to decide what
+    should be stored in V0.6a.
+    """
+
+    lowered = value.lower().strip()
+
+    volpe_prefixes = (
+        "tu ",
+        "ton ",
+        "ta ",
+        "tes ",
+        "volp-e ",
+        "volpe ",
+        "volpi ",
+    )
+
+    if lowered.startswith(
+        volpe_prefixes
+    ):
+        return "volpe"
+
+    user_prefixes = (
+        "je ",
+        "j'",
+        "mon ",
+        "ma ",
+        "mes ",
+        "moi ",
+    )
+
+    if lowered.startswith(
+        user_prefixes
+    ):
+        return "user"
+
+    return "general"
+
+
+def remember_persistent_fact(
+    value,
+    subject=None
+):
+    value = normalize_memory_text(
+        value
+    )
+
+    if not value:
+        return {
+            "ok": False,
+            "stored": False,
+            "reason": "empty memory",
+        }
+
+    if subject is None:
+        subject = classify_memory_subject(
+            value
+        )
+
+    value = canonicalize_memory(
+        value,
+        subject
+    )
+
+    comparable = value.casefold()
+
+    # Avoid exact duplicates.
+    for item in PERSISTENT_MEMORY[
+        "items"
+    ]:
+        if str(
+            item.get("text", "")
+        ).casefold() == comparable:
+
+            return {
+                "ok": True,
+                "stored": False,
+                "duplicate": True,
+                "text": value,
+                "subject": subject,
+            }
+
+    PERSISTENT_MEMORY[
+        "items"
+    ].append({
+        "text": value,
+        "subject": subject,
+        "created_at": time.time(),
+    })
+
+    if len(
+        PERSISTENT_MEMORY["items"]
+    ) > MEMORY_MAX_ITEMS:
+
+        del PERSISTENT_MEMORY[
+            "items"
+        ][
+            :-MEMORY_MAX_ITEMS
+        ]
+
+    save_persistent_memory()
+
+    print(
+        "[Volp-E memory] remembered: "
+        f"{value}",
+        flush=True
+    )
+
+    return {
+        "ok": True,
+        "stored": True,
+        "duplicate": False,
+        "text": value,
+        "subject": subject,
+    }
+
+
+def extract_explicit_memory_command(
+    user_text
+):
+    """
+    Recognise only explicit save requests.
+
+    Examples:
+      Souviens-toi que mon jeu pr?f?r? est...
+      Retiens que...
+      M?morise que...
+      N'oublie pas que...
+    """
+
+    value = str(
+        user_text or ""
+    ).strip()
+
+    if not value:
+        return None
+
+    patterns = (
+        r"^\s*souviens[\s-]*toi\s+que\s+(.+)$",
+        r"^\s*retiens\s+que\s+(.+)$",
+        r"^\s*retient\s+que\s+(.+)$",
+        r"^\s*m[?e]morise\s+que\s+(.+)$",
+        r"^\s*n['?]oublie\s+pas\s+que\s+(.+)$",
+        r"^\s*garde\s+en\s+m[?e]moire\s+que\s+(.+)$",
+    )
+
+    for pattern in patterns:
+        match = re.match(
+            pattern,
+            value,
+            flags=re.IGNORECASE
+        )
+
+        if match:
+            memory = normalize_memory_text(
+                match.group(1)
+            )
+
+            return (
+                memory
+                if memory
+                else None
+            )
+
+    return None
+
+
+def should_skip_auto_memory(user_text):
+    """
+    Fast local filter.
+
+    Avoid calling the memory classifier for obviously transient
+    or uninteresting messages.
+    """
+
+    value = str(
+        user_text or ""
+    ).strip()
+
+    if not value:
+        return True
+
+    lowered = value.casefold()
+
+    # Explicit memory commands are already handled by V0.6a.
+    if extract_explicit_memory_command(value):
+        return True
+
+    # Very short conversational messages are usually transient.
+    if len(value) < 18:
+        return True
+
+    transient_patterns = (
+        "bonjour",
+        "salut",
+        "bonne nuit",
+        "? toute",
+        "a toute",
+        "? plus",
+        "a plus",
+        "merci",
+        "je vais manger",
+        "je vais dormir",
+        "je reviens",
+        "j'arrive",
+        "?a va",
+        "ca va",
+    )
+
+    if any(
+        pattern in lowered
+        for pattern in transient_patterns
+    ):
+        return True
+
+    return False
+
+
+def analyze_auto_memory(
+    user_text,
+    assistant_text=""
+):
+    """
+    Ask the local LLM whether this user message contains
+    one durable memory worth keeping.
+
+    The classifier may propose at most one memory.
+    """
+
+    if not AUTO_MEMORY_ENABLED:
+        return None
+
+    if should_skip_auto_memory(
+        user_text
+    ):
+        return None
+
+    classifier_prompt = """
+Tu es le filtre de m?moire longue dur?e de Volp-E.
+
+Analyse UNIQUEMENT le message de l'utilisateur.
+
+D?cide s'il contient UNE information durable qui sera
+probablement utile lors de futures conversations.
+
+M?MORISER :
+- identit? ou pr?nom
+- pr?f?rence ou go?t durable
+- projet important
+- objectif
+- habitude stable
+- relation importante
+- information personnelle stable et utile
+
+NE PAS M?MORISER :
+- salutations
+- petites conversations
+- humeur ou ?tat temporaire
+- ce que l'utilisateur fait uniquement aujourd'hui
+- question sans information personnelle
+- hypoth?se ou blague
+- information invent?e par Volp-E
+- mot de passe, code secret ou identifiant sensible
+- donn?e bancaire
+- information m?dicale d?taill?e
+- adresse pr?cise ou localisation priv?e
+- toute information dont tu n'es pas suffisamment certain
+
+IMPORTANT :
+Le message USER vient d'une personne distincte de Volp-E.
+"je", "mon", "ma", "mes" dans le message USER d?signent
+l'utilisateur.
+
+Si une m?moire est pertinente, reformule-la ? la troisi?me
+personne sans changer son sens.
+
+R?ponds UNIQUEMENT avec un objet JSON valide.
+
+Si rien ne m?rite d'?tre m?moris? :
+{"remember":false}
+
+Sinon :
+{
+  "remember":true,
+  "text":"fait durable reformul?",
+  "subject":"user",
+  "category":"preference",
+  "confidence":0.95
+}
+
+Cat?gories autoris?es :
+identity
+preference
+project
+goal
+habit
+relationship
+important_fact
+""".strip()
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": classifier_prompt,
+            },
+            {
+                "role": "user",
+                "content": str(
+                    user_text
+                ),
+            },
+        ],
+        "stream": False,
+        "think": False,
+        "format": "json",
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 100,
+        },
+    }
+
+    request = Request(
+        OLLAMA_URL,
+        data=json.dumps(
+            payload
+        ).encode("utf-8"),
+        headers={
+            "Content-Type":
+                "application/json"
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(
+            request,
+            timeout=45.0
+        ) as response:
+            result = json.loads(
+                response.read().decode(
+                    "utf-8"
+                )
+            )
+
+        raw = str(
+            result.get(
+                "message",
+                {}
+            ).get(
+                "content",
+                ""
+            )
+        ).strip()
+
+        if not raw:
+            return None
+
+        decision = json.loads(raw)
+
+        if not isinstance(
+            decision,
+            dict
+        ):
+            return None
+
+        if not decision.get(
+            "remember"
+        ):
+            return None
+
+        value = normalize_memory_text(
+            decision.get("text")
+        )
+
+        if not value:
+            return None
+
+        try:
+            confidence = float(
+                decision.get(
+                    "confidence",
+                    0.0
+                )
+            )
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        if (
+            confidence
+            < AUTO_MEMORY_MIN_CONFIDENCE
+        ):
+            return None
+
+        category = str(
+            decision.get(
+                "category",
+                "important_fact"
+            )
+        ).strip()
+
+        if (
+            category
+            not in
+            AUTO_MEMORY_ALLOWED_CATEGORIES
+        ):
+            return None
+
+        return {
+            "text": value,
+            "subject": "user",
+            "category": category,
+            "confidence": confidence,
+        }
+
+    except Exception as exc:
+        print(
+            "[Volp-E auto-memory] "
+            f"classifier error: {exc}",
+            flush=True
+        )
+
+        return None
+
+
+def auto_memory_worker(
+    user_text,
+    assistant_text=""
+):
+    """
+    Background worker so automatic memory does not delay
+    Volp-E's conversational response.
+    """
+
+    try:
+        candidate = analyze_auto_memory(
+            user_text,
+            assistant_text
+        )
+
+        if not candidate:
+            return
+
+        result = remember_persistent_fact(
+            candidate["text"],
+            subject=candidate[
+                "subject"
+            ]
+        )
+
+        if result.get("stored"):
+            print(
+                "[Volp-E auto-memory] "
+                "remembered "
+                f"({candidate['category']}, "
+                f"{candidate['confidence']:.2f}): "
+                f"{candidate['text']}",
+                flush=True
+            )
+
+    except Exception as exc:
+        print(
+            "[Volp-E auto-memory] "
+            f"worker error: {exc}",
+            flush=True
+        )
+
+
+def schedule_auto_memory(
+    user_text,
+    assistant_text=""
+):
+    if not AUTO_MEMORY_ENABLED:
+        return
+
+    if should_skip_auto_memory(
+        user_text
+    ):
+        return
+
+    threading.Thread(
+        target=auto_memory_worker,
+        args=(
+            str(user_text),
+            str(assistant_text),
+        ),
+        daemon=True,
+        name="volpe-auto-memory",
+    ).start()
+
+
+def build_persistent_memory_prompt():
+    items = PERSISTENT_MEMORY.get(
+        "items",
+        []
+    )
+
+    if not items:
+        return ""
+
+    user_items = []
+    volpe_items = []
+    general_items = []
+
+    for item in items:
+        value = str(
+            item.get("text")
+            or ""
+        ).strip()
+
+        if not value:
+            continue
+
+        subject = item.get(
+            "subject",
+            "general"
+        )
+
+        if subject == "user":
+            user_items.append(value)
+
+        elif subject == "volpe":
+            volpe_items.append(value)
+
+        else:
+            general_items.append(value)
+
+    sections = [
+        "M?MOIRE PERSISTANTE DE VOLP-E",
+        "",
+        "Ces informations ont ?t? explicitement "
+        "demand?es ? ?tre m?moris?es.",
+        "Consid?re-les comme des souvenirs durables.",
+        "UTILISATEUR et VOLP-E sont deux personnes distinctes.",
+        "Tout souvenir pr?fix? UTILISATEUR appartient ? "
+        "l'interlocuteur, jamais ? Volp-E.",
+        "Tout souvenir pr?fix? VOLP-E appartient ? Volp-E.",
+        "Les pronoms je, mon, ma et mes pr?sents dans un "
+        "souvenir UTILISATEUR d?signent l'utilisateur.",
+        "Utilise les souvenirs naturellement lorsqu'ils sont "
+        "pertinents.",
+        "Ne les r?cite pas sans raison.",
+        "N'invente jamais une exp?rience personnelle ? partir "
+        "d'un souvenir de l'utilisateur.",
+        "Un souvenir n'est PAS un ?tat capteur actuel.",
+    ]
+
+    if user_items:
+        sections.extend([
+            "",
+            "? PROPOS DE L'UTILISATEUR :"
+        ])
+
+        sections.extend(
+            "- " + value
+            for value in user_items
+        )
+
+    if volpe_items:
+        sections.extend([
+            "",
+            "PR?F?RENCES / INFORMATIONS SUR VOLP-E :"
+        ])
+
+        sections.extend(
+            "- " + value
+            for value in volpe_items
+        )
+
+    if general_items:
+        sections.extend([
+            "",
+            "AUTRES SOUVENIRS :"
+        ])
+
+        sections.extend(
+            "- " + value
+            for value in general_items
+        )
+
+    return "\n".join(
+        sections
+    )
+
+
+def persistent_memory_summary():
+    return {
+        "file": str(MEMORY_FILE),
+        "count": len(
+            PERSISTENT_MEMORY.get(
+                "items",
+                []
+            )
+        ),
+        "max_items": MEMORY_MAX_ITEMS,
+        "auto_memory": {
+            "enabled": AUTO_MEMORY_ENABLED,
+            "min_confidence":
+                AUTO_MEMORY_MIN_CONFIDENCE,
+        },
+        "items": PERSISTENT_MEMORY.get(
+            "items",
+            []
+        ),
+    }
 
 
 def deep_merge(default, override):
@@ -410,11 +1457,69 @@ def transcribe_audio(path):
     return " ".join(parts).strip()
 
 
-def chat_with_ollama(user_text):
+def chat_with_ollama(
+    user_text,
+    robot_context=None
+):
     user_text = str(user_text or "").strip()
 
     if not user_text:
         raise ValueError("empty user text")
+
+    explicit_memory = (
+        extract_explicit_memory_command(
+            user_text
+        )
+    )
+
+    if explicit_memory:
+        memory_result = (
+            remember_persistent_fact(
+                explicit_memory
+            )
+        )
+
+        if memory_result.get(
+            "duplicate"
+        ):
+            answer = (
+                "Oui, je m'en souvenais d?j?."
+            )
+        else:
+            answer = (
+                "D'accord, je m'en souviendrai."
+            )
+
+        # Keep the acknowledgement in the short-term
+        # conversation history as well.
+        CHAT_HISTORY.extend([
+            {
+                "role": "user",
+                "content": user_text,
+            },
+            {
+                "role": "assistant",
+                "content": answer,
+            },
+        ])
+
+        if (
+            len(CHAT_HISTORY)
+            > CHAT_HISTORY_MAX_MESSAGES
+        ):
+            del CHAT_HISTORY[
+                :-CHAT_HISTORY_MAX_MESSAGES
+            ]
+
+        return {
+            "text": answer,
+            "model": "persistent-memory",
+            "processing_seconds": 0.0,
+            "history_messages":
+                len(CHAT_HISTORY),
+            "memory_saved": True,
+            "memory": explicit_memory,
+        }
 
     messages = [
         {
@@ -423,7 +1528,63 @@ def chat_with_ollama(user_text):
         }
     ]
 
+    # Previous conversation comes first.
+    # The live physical state is injected AFTER history so that
+    # stale observations from older messages cannot override
+    # what Volp-E's sensors are reporting right now.
+    memory_prompt = (
+        build_persistent_memory_prompt()
+    )
+
+    if memory_prompt:
+        messages.append({
+            "role": "system",
+            "content": memory_prompt,
+        })
+
     messages.extend(CHAT_HISTORY)
+
+    if isinstance(robot_context, dict):
+        person = robot_context.get(
+            "person",
+            {}
+        )
+
+        detected = bool(
+            person.get("detected", False)
+        )
+
+        perception_rule = (
+            "FAIT ACTUEL : ta cam?ra d?tecte une personne maintenant."
+            if detected
+            else
+            "FAIT ACTUEL : ta cam?ra ne d?tecte aucune personne maintenant."
+        )
+
+        context_prompt = (
+            "?TAT PHYSIQUE ACTUEL DE VOLP-E\n\n"
+            + perception_rule
+            + "\n\n"
+            "Ces donn?es d?crivent ton ?tat physique r?el.\n"
+            "Utilise-les UNIQUEMENT lorsque la question concerne "
+            "tes capteurs, ta cam?ra, ce que tu vois, ta position, "
+            "ton humeur interne, ton ?tat ou la situation physique actuelle.\n"
+            "Pour une question g?n?rale, une opinion, un jeu, une id?e, "
+            "une discussion ou une pr?f?rence, r?ponds normalement "
+            "sans ramener inutilement la conversation ? tes capteurs.\n"
+            "Si la question concerne tes capteurs, ces donn?es sont "
+            "prioritaires sur l'historique et ne doivent jamais ?tre invent?es.\n\n"
+            + json.dumps(
+                robot_context,
+                ensure_ascii=False,
+                indent=2
+            )
+        )
+
+        messages.append({
+            "role": "system",
+            "content": context_prompt,
+        })
 
     messages.append({
         "role": "user",
@@ -436,8 +1597,11 @@ def chat_with_ollama(user_text):
         "stream": False,
         "think": False,
         "options": {
-            "temperature": 0.7,
-            "num_predict": 120,
+            "temperature": 0.5,
+            "top_p": 0.8,
+            "top_k": 20,
+            "num_ctx": 4096,
+            "num_predict": 64,
         },
     }
 
@@ -467,6 +1631,22 @@ def chat_with_ollama(user_text):
         )
     ).strip()
 
+    # Qwen3 should run with thinking disabled.
+    # If a reasoning block leaks into content anyway,
+    # discard it and keep only the final response.
+    if "</think>" in answer:
+        answer = answer.split(
+            "</think>",
+            1
+        )[-1].strip()
+
+    if answer.startswith("<think>"):
+        end = answer.find("</think>")
+        if end >= 0:
+            answer = answer[
+                end + len("</think>"):
+            ].strip()
+
     if not answer:
         raise RuntimeError(
             "Ollama returned an empty answer"
@@ -482,6 +1662,13 @@ def chat_with_ollama(user_text):
             "content": answer,
         },
     ])
+
+    # V0.6b:
+    # evaluate durable memories asynchronously.
+    schedule_auto_memory(
+        user_text,
+        answer
+    )
 
     if len(CHAT_HISTORY) > CHAT_HISTORY_MAX_MESSAGES:
         del CHAT_HISTORY[
@@ -527,6 +1714,14 @@ class DesktopBrainHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/personality":
             self.send_json({"ok": True, "personality": PERSONALITY})
+            return
+
+        if self.path == "/memory":
+            self.send_json({
+                "ok": True,
+                "memory":
+                    persistent_memory_summary(),
+            })
             return
         self.send_error(404)
 
@@ -607,8 +1802,19 @@ class DesktopBrainHandler(BaseHTTPRequestHandler):
             if not user_text:
                 raise ValueError("missing text")
 
+            robot_context = payload.get(
+                "robot_context"
+            )
+
+            if not isinstance(
+                robot_context,
+                dict
+            ):
+                robot_context = None
+
             result = chat_with_ollama(
-                user_text
+                user_text,
+                robot_context=robot_context
             )
 
             self.send_json({
@@ -620,6 +1826,11 @@ class DesktopBrainHandler(BaseHTTPRequestHandler):
                     result["processing_seconds"],
                 "history_messages":
                     result["history_messages"],
+                "robot_context_received":
+                    isinstance(
+                        robot_context,
+                        dict
+                    ),
             })
 
         except Exception as exc:

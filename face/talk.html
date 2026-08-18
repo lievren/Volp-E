@@ -276,6 +276,116 @@ body:before{
   font:bold 10px Consolas,monospace;
 }
 
+.text-chat{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:6px;
+}
+
+.text-chat input{
+  min-width:0;
+  height:38px;
+  padding:0 11px;
+  border-radius:10px;
+  border:1px solid rgba(49,245,255,.22);
+  outline:none;
+  background:rgba(9,17,31,.96);
+  color:var(--text);
+  font:11px Consolas,monospace;
+}
+
+.text-chat input:focus{
+  border-color:var(--cyan);
+  box-shadow:0 0 10px rgba(49,245,255,.12);
+}
+
+.text-chat input::placeholder{
+  color:var(--muted);
+}
+
+.text-chat button{
+  min-width:70px;
+  padding:0 12px;
+  border-radius:10px;
+  border:1px solid rgba(255,59,212,.45);
+  background:rgba(255,59,212,.08);
+  color:var(--pink);
+  font:bold 10px Consolas,monospace;
+  letter-spacing:1px;
+  cursor:pointer;
+}
+
+.text-chat button:disabled,
+.text-chat input:disabled{
+  opacity:.45;
+}
+
+.conversation-panel{
+  min-height:115px;
+  max-height:155px;
+  overflow-y:auto;
+  border:1px solid rgba(49,245,255,.18);
+  border-radius:11px;
+  background:rgba(9,17,31,.9);
+  padding:8px 10px;
+  scrollbar-width:thin;
+}
+
+.conversation-title{
+  position:sticky;
+  top:0;
+  z-index:2;
+  padding-bottom:5px;
+  margin-bottom:5px;
+  color:var(--pink);
+  background:rgba(9,17,31,.98);
+  font:8px Consolas,monospace;
+  letter-spacing:1.2px;
+}
+
+.exchange{
+  padding:6px 0;
+  border-top:1px solid rgba(49,245,255,.08);
+}
+
+.exchange:first-of-type{
+  border-top:0;
+}
+
+.message-label{
+  margin-bottom:2px;
+  font:bold 7px Consolas,monospace;
+  letter-spacing:1px;
+}
+
+.message-label.user{
+  color:var(--cyan);
+}
+
+.message-label.volpe{
+  color:var(--pink);
+  margin-top:5px;
+}
+
+.message-text{
+  color:var(--text);
+  font:10px Consolas,monospace;
+  line-height:1.35;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+.message-text.volpe{
+  color:var(--green);
+}
+
+.history-empty{
+  padding:17px 0;
+  text-align:center;
+  color:var(--muted);
+  font:9px Consolas,monospace;
+}
+
 @media(max-height:700px){
   .app{
     padding:6px 0;
@@ -345,62 +455,38 @@ body:before{
 
   </main>
 
-  <section
-    id="transcriptPanel"
-    style="
-      border:1px solid rgba(49,245,255,.18);
-      border-radius:11px;
-      background:rgba(9,17,31,.9);
-      padding:8px 10px;
-      min-height:46px;
-      overflow:hidden;
-    "
-  >
-    <div style="
-      color:#ff3bd4;
-      font:8px Consolas,monospace;
-      letter-spacing:1.2px;
-      margin-bottom:4px;
-    ">
-      TRANSCRIPTION // STT
+  <section class="conversation-panel">
+    <div class="conversation-title">
+      CONVERSATION // LAST 5 EXCHANGES
     </div>
 
-    <div
-      id="transcript"
-      style="
-        color:#ecfaff;
-        font:11px Consolas,monospace;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      "
-    >
-      Waiting for voice input...
-    </div>
-
-    <div style="
-      color:#31f5ff;
-      font:8px Consolas,monospace;
-      letter-spacing:1.2px;
-      margin-top:7px;
-      margin-bottom:3px;
-    ">
-      VOLP-E // RESPONSE
-    </div>
-
-    <div
-      id="reply"
-      style="
-        color:#4dff9b;
-        font:10px Consolas,monospace;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      "
-    >
-      Waiting...
+    <div id="conversationHistory">
+      <div class="history-empty">
+        NO CONVERSATION YET
+      </div>
     </div>
   </section>
+
+  <form
+    class="text-chat"
+    id="textChat"
+    autocomplete="off"
+  >
+    <input
+      id="textInput"
+      type="text"
+      maxlength="300"
+      placeholder="Write to Volp-E..."
+      enterkeyhint="send"
+    >
+
+    <button
+      id="textSend"
+      type="submit"
+    >
+      SEND
+    </button>
+  </form>
 
   <section class="telemetry">
 
@@ -437,6 +523,140 @@ const statusBox =
 let recording=false;
 let startedAt=0;
 let timer=null;
+
+const textChat =
+  document.getElementById("textChat");
+
+const textInput =
+  document.getElementById("textInput");
+
+const textSend =
+  document.getElementById("textSend");
+
+let textBusy=false;
+
+const historyBox =
+  document.getElementById("conversationHistory");
+
+const HISTORY_KEY =
+  "volpe_conversation_history_v1";
+
+const HISTORY_LIMIT = 5;
+
+let conversationHistory=[];
+
+
+function loadConversationHistory(){
+  try{
+    const stored=
+      JSON.parse(
+        localStorage.getItem(HISTORY_KEY) || "[]"
+      );
+
+    if(Array.isArray(stored)){
+      conversationHistory=
+        stored.slice(-HISTORY_LIMIT);
+    }
+  }catch(error){
+    conversationHistory=[];
+  }
+
+  renderConversationHistory();
+}
+
+
+function saveConversationHistory(){
+  try{
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify(conversationHistory)
+    );
+  }catch(error){}
+}
+
+
+function escapeHtml(value){
+  return String(value)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+
+function renderConversationHistory(){
+  if(!historyBox){
+    return;
+  }
+
+  if(!conversationHistory.length){
+    historyBox.innerHTML=
+      '<div class="history-empty">'+
+      'NO CONVERSATION YET'+
+      '</div>';
+    return;
+  }
+
+  historyBox.innerHTML=
+    conversationHistory.map(exchange=>{
+      return (
+        '<div class="exchange">'+
+
+          '<div class="message-label user">'+
+            'YOU'+
+          '</div>'+
+
+          '<div class="message-text">'+
+            escapeHtml(exchange.user)+
+          '</div>'+
+
+          '<div class="message-label volpe">'+
+            'VOLP-E'+
+          '</div>'+
+
+          '<div class="message-text volpe">'+
+            escapeHtml(exchange.reply)+
+          '</div>'+
+
+        '</div>'
+      );
+    }).join("");
+
+  const panel=
+    historyBox.closest(
+      ".conversation-panel"
+    );
+
+  if(panel){
+    panel.scrollTop=
+      panel.scrollHeight;
+  }
+}
+
+
+function addExchange(user,reply){
+  user=String(user || "").trim();
+  reply=String(reply || "").trim();
+
+  if(!user && !reply){
+    return;
+  }
+
+  conversationHistory.push({
+    user:user || "[EMPTY]",
+    reply:reply || "[NO RESPONSE]"
+  });
+
+  conversationHistory=
+    conversationHistory.slice(
+      -HISTORY_LIMIT
+    );
+
+  saveConversationHistory();
+  renderConversationHistory();
+}
+
 
 
 function setStatus(text,type=""){
@@ -584,9 +804,7 @@ async function stopTalk(event){
         processData.talk.transcript || ""
       ).trim();
 
-    document.getElementById(
-      "transcript"
-    ).textContent =
+    const pendingUserMessage =
       transcript || "[NO SPEECH DETECTED]";
 
     setStatus(
@@ -616,10 +834,10 @@ async function stopTalk(event){
         thinkData.talk.reply || ""
       ).trim();
 
-    document.getElementById(
-      "reply"
-    ).textContent =
-      reply || "[NO RESPONSE]";
+    addExchange(
+      pendingUserMessage,
+      reply || "[NO RESPONSE]"
+    );
 
     setStatus(
       "RESPONDING...",
@@ -663,6 +881,113 @@ async function stopTalk(event){
     );
   }
 }
+
+
+async function sendTextMessage(event){
+  event.preventDefault();
+
+  if(textBusy || recording){
+    return;
+  }
+
+  const message =
+    String(textInput.value || "").trim();
+
+  if(!message){
+    return;
+  }
+
+  textBusy=true;
+  textInput.disabled=true;
+  textSend.disabled=true;
+
+  setStatus("THINKING...");
+
+  try{
+    const response=
+      await fetch(
+        "/api/chat/text?text="+
+        encodeURIComponent(message)+
+        "&t="+Date.now()
+      );
+
+    const data=
+      await response.json();
+
+    if(!response.ok || !data.ok){
+      throw new Error(
+        data.error || "Chat failed"
+      );
+    }
+
+    const reply=
+      String(
+        data.talk.reply || ""
+      ).trim();
+
+    addExchange(
+      message,
+      reply || "[NO RESPONSE]"
+    );
+
+    setStatus(
+      "RESPONDING...",
+      "listen"
+    );
+
+    wave.classList.add("listening");
+
+    const speakResponse=
+      await fetch(
+        "/api/say?force=1&sync=1&text="+
+        encodeURIComponent(reply)
+      );
+
+    const speakData=
+      await speakResponse.json();
+
+    wave.classList.remove("listening");
+
+    if(
+      !speakResponse.ok ||
+      !speakData.ok
+    ){
+      throw new Error(
+        speakData.error ||
+        "Speech output failed"
+      );
+    }
+
+    textInput.value="";
+
+    setStatus(
+      "AUDIO-LINK READY",
+      "listen"
+    );
+
+  }catch(error){
+    console.error(error);
+
+    wave.classList.remove("listening");
+
+    setStatus(
+      "TEXT CHAT ERROR",
+      "error"
+    );
+
+  }finally{
+    textBusy=false;
+    textInput.disabled=false;
+    textSend.disabled=false;
+    textInput.focus();
+  }
+}
+
+
+textChat.addEventListener(
+  "submit",
+  sendTextMessage
+);
 
 
 button.addEventListener(
@@ -723,6 +1048,7 @@ async function loadStatus(){
 }
 
 loadStatus();
+loadConversationHistory();
 </script>
 
 </body>

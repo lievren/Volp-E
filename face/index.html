@@ -330,6 +330,15 @@ body:before{
   border:1px solid rgba(255,59,212,.28);
 }
 
+.action-work{
+  border:1px solid rgba(255,179,71,.35);
+}
+
+.action-work strong,
+.action-work .arrow{
+  color:var(--orange);
+}
+
 .action strong{
   display:block;
   font-size:11px;
@@ -428,7 +437,7 @@ body:before{
 <style id="v04-force-three-actions">
 .actions{
   display:grid !important;
-  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
   gap:6px !important;
 }
 
@@ -444,7 +453,7 @@ body:before{
 
 @media(max-width:500px){
   .actions{
-    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
   }
 
   .action{
@@ -655,6 +664,18 @@ body:before{
       <div>
         <strong>TALK</strong>
         <small>MIC // AUDIO-LINK</small>
+      </div>
+
+      <span class="arrow">›</span>
+    </a>
+
+    <a
+      class="action action-work"
+      href="/work.html"
+    >
+      <div>
+        <strong>WORK</strong>
+        <small>MAINTENANCE</small>
       </div>
 
       <span class="arrow">›</span>

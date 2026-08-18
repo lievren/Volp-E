@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#05070d">
+
+<title>Volp-E // Work</title>
+
+<style>
+:root{
+  --bg:#05070d;
+  --panel:rgba(9,17,31,.92);
+  --cyan:#31f5ff;
+  --pink:#ff3bd4;
+  --green:#4dff9b;
+  --orange:#ffb347;
+  --red:#ff5f77;
+  --text:#ecfaff;
+  --muted:#7892a8;
+}
+
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+
+body{
+  color:var(--text);
+  font-family:Arial,sans-serif;
+  background:
+    radial-gradient(circle at 0 0,
+      rgba(255,179,71,.13),transparent 30%),
+    radial-gradient(circle at 100% 10%,
+      rgba(49,245,255,.12),transparent 30%),
+    var(--bg);
+}
+
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(49,245,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(49,245,255,.035) 1px,transparent 1px);
+  background-size:27px 27px;
+}
+
+.app{
+  width:min(95vw,720px);
+  height:100dvh;
+  margin:auto;
+  padding:10px 0;
+  display:grid;
+  grid-template-rows:auto auto auto minmax(0,1fr);
+  gap:8px;
+}
+
+.top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.back{
+  padding:8px 11px;
+  text-decoration:none;
+  border-radius:11px;
+  border:1px solid rgba(49,245,255,.25);
+  color:var(--cyan);
+  background:rgba(49,245,255,.05);
+  font:11px Consolas,monospace;
+}
+
+.heading{text-align:right}
+
+.heading strong{
+  display:block;
+  color:var(--orange);
+  font-size:14px;
+  letter-spacing:2px;
+}
+
+.heading small{
+  color:var(--muted);
+  font:9px Consolas,monospace;
+}
+
+.panel{
+  border:1px solid rgba(49,245,255,.16);
+  border-radius:14px;
+  background:var(--panel);
+  overflow:hidden;
+}
+
+.title{
+  padding:8px 10px 5px;
+  color:var(--cyan);
+  font:9px Consolas,monospace;
+  letter-spacing:1.3px;
+}
+
+.actions{
+  padding:7px;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:6px;
+}
+
+.action{
+  min-height:48px;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+  color:var(--text);
+  font:bold 9px Consolas,monospace;
+  letter-spacing:.6px;
+  cursor:pointer;
+}
+
+.restart{
+  border:1px solid rgba(49,245,255,.30);
+  color:var(--cyan);
+}
+
+.reboot{
+  border:1px solid rgba(255,179,71,.35);
+  color:var(--orange);
+}
+
+.poweroff{
+  border:1px solid rgba(255,95,119,.42);
+  color:var(--red);
+}
+
+.diag{
+  padding:8px;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:6px;
+}
+
+.stat{
+  min-width:0;
+  padding:7px 5px;
+  text-align:center;
+  border-radius:9px;
+  border:1px solid rgba(49,245,255,.10);
+  background:rgba(0,0,0,.15);
+}
+
+.stat .name{
+  color:var(--muted);
+  font:7px Consolas,monospace;
+  letter-spacing:.6px;
+}
+
+.stat .value{
+  margin-top:4px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  color:var(--green);
+  font:bold 9px Consolas,monospace;
+}
+
+.logs{
+  min-height:0;
+  display:grid;
+  grid-template-rows:auto 1fr;
+}
+
+.logs-top{
+  padding:7px 9px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.logs-title{
+  color:var(--green);
+  font:9px Consolas,monospace;
+  letter-spacing:1.2px;
+}
+
+.live{
+  color:var(--green);
+  font:8px Consolas,monospace;
+}
+
+pre{
+  margin:0;
+  min-height:0;
+  overflow:auto;
+  padding:9px;
+  background:#020509;
+  color:#81f7a7;
+  font:9px/1.35 Consolas,monospace;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+
+.modal{
+  display:none;
+  position:fixed;
+  z-index:50;
+  inset:0;
+  padding:20px;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,.76);
+}
+
+.modal.show{display:flex}
+
+.dialog{
+  width:min(92vw,390px);
+  padding:17px;
+  border-radius:15px;
+  border:1px solid rgba(255,95,119,.38);
+  background:#09111f;
+  box-shadow:0 0 35px rgba(255,95,119,.12);
+}
+
+.dialog strong{
+  display:block;
+  color:var(--red);
+  letter-spacing:1px;
+}
+
+.dialog p{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.dialog-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.dialog button{
+  height:42px;
+  border-radius:9px;
+  font:bold 10px Consolas,monospace;
+}
+
+.cancel{
+  border:1px solid rgba(49,245,255,.25);
+  background:transparent;
+  color:var(--cyan);
+}
+
+.confirm{
+  border:1px solid var(--red);
+  background:rgba(255,95,119,.08);
+  color:var(--red);
+}
+
+@media(max-height:700px){
+  .app{padding:6px 0;gap:5px}
+  .action{min-height:40px;font-size:8px}
+  .diag{padding:5px;gap:4px}
+  .stat{padding:5px 3px}
+  pre{font-size:8px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <header class="top">
+    <a class="back" href="/">‹ CORE</a>
+
+    <div class="heading">
+      <strong>WORK // MAINTENANCE</strong>
+      <small>VOLP-E // ENGINEERING MODE</small>
+    </div>
+  </header>
+
+
+  <section class="panel">
+    <div class="title">
+      SYSTEM CONTROL
+    </div>
+
+    <div class="actions">
+      <button class="action restart"
+              onclick="requestAction('restart-brain')">
+        RESTART BRAIN
+      </button>
+
+      <button class="action reboot"
+              onclick="confirmAction('reboot')">
+        REBOOT
+      </button>
+
+      <button class="action poweroff"
+              onclick="confirmAction('poweroff')">
+        POWER OFF
+      </button>
+    </div>
+  </section>
+
+
+  <section class="panel">
+    <div class="title">
+      LIVE DIAGNOSTICS
+    </div>
+
+    <div class="diag">
+      <div class="stat">
+        <div class="name">PI</div>
+        <div class="value" id="pi">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">BRAIN</div>
+        <div class="value" id="brain">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">CAMERA</div>
+        <div class="value" id="camera">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">PERSON</div>
+        <div class="value" id="person">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">CPU</div>
+        <div class="value" id="cpu">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">RAM</div>
+        <div class="value" id="ram">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">DISK</div>
+        <div class="value" id="disk">...</div>
+      </div>
+
+      <div class="stat">
+        <div class="name">MOOD</div>
+        <div class="value" id="mood">...</div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="panel logs">
+    <div class="logs-top">
+      <span class="logs-title">
+        VOLP-E // LIVE SERVICE LOG
+      </span>
+
+      <span class="live">
+        ● AUTO 2s
+      </span>
+    </div>
+
+    <pre id="logBox">Connecting to system journal...</pre>
+  </section>
+
+</div>
+
+
+<div class="modal" id="modal">
+  <div class="dialog">
+    <strong id="modalTitle">
+      CONFIRM SYSTEM ACTION
+    </strong>
+
+    <p id="modalText">
+      This action affects Volp-E.
+    </p>
+
+    <div class="dialog-actions">
+      <button class="cancel"
+              onclick="closeModal()">
+        CANCEL
+      </button>
+
+      <button class="confirm"
+              id="confirmButton">
+        CONFIRM
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const logBox=document.getElementById("logBox");
+const modal=document.getElementById("modal");
+
+let pendingAction=null;
+
+
+async function refreshDiagnostics(){
+  try{
+    const [statusRes,systemRes,contextRes]=
+      await Promise.all([
+        fetch("/api/status?t="+Date.now()),
+        fetch("/api/system?t="+Date.now()),
+        fetch("/api/context?t="+Date.now())
+      ]);
+
+    const status=await statusRes.json();
+    const system=await systemRes.json();
+    const context=await contextRes.json();
+
+    const robot=context.robot_context || {};
+
+    document.getElementById("pi").textContent=
+      String(status.pi || "unknown").toUpperCase();
+
+    document.getElementById("brain").textContent=
+      String(status.desktop_brain || "unknown").toUpperCase();
+
+    document.getElementById("camera").textContent=
+      String(status.camera || "unknown").toUpperCase();
+
+    document.getElementById("person").textContent=
+      robot.person?.detected ? "DETECTED" : "NONE";
+
+    document.getElementById("cpu").textContent=
+      (system.cpu?.temperature_c ?? "--")+"°C";
+
+    document.getElementById("ram").textContent=
+      (system.memory?.usage_percent ?? "--")+"%";
+
+    document.getElementById("disk").textContent=
+      (system.disk?.usage_percent ?? "--")+"%";
+
+    document.getElementById("mood").textContent=
+      String(
+        robot.personality_state?.mood || "unknown"
+      ).toUpperCase();
+
+  }catch(error){
+    console.error(error);
+  }
+}
+
+
+async function refreshLogs(){
+  try{
+    const response=
+      await fetch(
+        "/api/work/logs?t="+Date.now()
+      );
+
+    const data=await response.json();
+
+    if(!data.ok){
+      throw new Error(
+        data.error || "logs unavailable"
+      );
+    }
+
+    const nearBottom=
+      logBox.scrollHeight -
+      logBox.scrollTop -
+      logBox.clientHeight < 60;
+
+    logBox.textContent=
+      data.logs || "[NO LOG DATA]";
+
+    if(nearBottom){
+      logBox.scrollTop=
+        logBox.scrollHeight;
+    }
+
+  }catch(error){
+    logBox.textContent=
+      "[LOG ERROR]\n"+error.message;
+  }
+}
+
+
+async function requestAction(action){
+  if(action==="restart-brain"){
+    if(!confirm(
+      "Restart Volp-E Brain service?"
+    )){
+      return;
+    }
+  }
+
+  try{
+    const response=
+      await fetch(
+        "/api/work/"+action,
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            confirm:"VOLPE"
+          })
+        }
+      );
+
+    const data=await response.json();
+
+    if(!response.ok || !data.ok){
+      throw new Error(
+        data.error || "action failed"
+      );
+    }
+
+    logBox.textContent=
+      "[WORK] "+action.toUpperCase()+
+      " accepted.\nWaiting for Volp-E...";
+
+  }catch(error){
+    alert(
+      "Action failed: "+error.message
+    );
+  }
+}
+
+
+function confirmAction(action){
+  pendingAction=action;
+
+  const title=
+    document.getElementById("modalTitle");
+
+  const text=
+    document.getElementById("modalText");
+
+  const confirmButton=
+    document.getElementById("confirmButton");
+
+  if(action==="poweroff"){
+    title.textContent="POWER OFF VOLP-E ?";
+    text.textContent=
+      "The Raspberry Pi will shut down safely. " +
+      "Physical power will remain connected.";
+    confirmButton.textContent="POWER OFF";
+  }else{
+    title.textContent="REBOOT VOLP-E ?";
+    text.textContent=
+      "The Raspberry Pi and all Volp-E services will restart.";
+    confirmButton.textContent="REBOOT";
+  }
+
+  confirmButton.onclick=async()=>{
+    closeModal();
+    await requestAction(pendingAction);
+  };
+
+  modal.classList.add("show");
+}
+
+
+function closeModal(){
+  modal.classList.remove("show");
+}
+
+
+refreshDiagnostics();
+refreshLogs();
+
+setInterval(
+  refreshDiagnostics,
+  3000
+);
+
+setInterval(
+  refreshLogs,
+  2000
+);
+</script>
+
+</body>
+</html>
