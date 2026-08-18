@@ -5,6 +5,8 @@ import json
 import mimetypes
 import os
 import re
+import signal
+import shutil
 import subprocess
 import threading
 import time
@@ -110,6 +112,39 @@ SPEECH_MIN_INTERVAL_SECONDS = personality_float("speech", "min_interval_seconds"
 VOICE_GAIN = max(0.0, min(1.0, personality_float("speech", "voice_gain", 0.5)))
 SPEECH_WAV_PATH = Path("/tmp/volpe-speech.wav")
 APLAY_DEVICE = os.environ.get("VOLPE_APLAY_DEVICE", "").strip()
+
+ARECORD_DEVICE = os.environ.get("VOLPE_ARECORD_DEVICE", "").strip()
+TALK_WAV_PATH = Path("/tmp/volpe-talk.wav")
+TALK_PROCESS = None
+TALK_LOCK = threading.Lock()
+
+# Manual conversation always has priority over autonomous speech.
+# After a manual reply finishes, autonomous speech stays muted
+# for a short cooldown.
+TALK_PRIORITY_UNTIL = 0.0
+TALK_PRIORITY_COOLDOWN_SECONDS = 20.0
+
+CONTROL_HOST = os.environ.get("VOLPE_CONTROL_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+try:
+    CONTROL_PORT = int(os.environ.get("VOLPE_CONTROL_PORT", "8765"))
+except ValueError:
+    CONTROL_PORT = 8765
+
+try:
+    CAMERA_WIDTH = int(os.environ.get("VOLPE_CAMERA_WIDTH", "320"))
+except ValueError:
+    CAMERA_WIDTH = 320
+
+try:
+    CAMERA_HEIGHT = int(os.environ.get("VOLPE_CAMERA_HEIGHT", "240"))
+except ValueError:
+    CAMERA_HEIGHT = 240
+
+try:
+    CAMERA_FPS = int(os.environ.get("VOLPE_CAMERA_FPS", "10"))
+except ValueError:
+    CAMERA_FPS = 10
 MEMORY_MAX_EVENTS = personality_int("memory", "max_events", 24)
 MEMORY_RECENT_SECONDS = personality_float("memory", "recent_seconds", 600)
 MEMORY_CLOSE_FACE_SIZE = personality_float("memory", "close_face_size", 0.70)
@@ -131,7 +166,7 @@ MEMORY_SEARCHING_CURIOSITY_GAIN = personality_float("memory", "searching_curiosi
 MEMORY_AMBIENT_ENERGY_LOSS = personality_float("memory", "ambient_energy_loss_per_second", 0.018)
 MEMORY_AMBIENT_CURIOSITY_LOSS = personality_float("memory", "ambient_curiosity_loss_per_second", 0.016)
 PERSONALITY_TICK_MIN_SECONDS = 0.25
-FRAME_SIZE = (320, 240)
+FRAME_SIZE = (CAMERA_WIDTH, CAMERA_HEIGHT)
 ROTATE_180 = True
 LATEST_FRAME = Path("/tmp/volpe-latest-frame.jpg")
 LATEST_FRAME_MAX_AGE_SECONDS = 8
@@ -179,6 +214,20 @@ STATE = {
         "attention": None,
         "actions": [],
     },
+    "talk": {
+        "status": "idle",
+        "started_at": 0.0,
+        "stopped_at": 0.0,
+        "duration_seconds": 0.0,
+        "audio_bytes": 0,
+        "audio_path": str(TALK_WAV_PATH),
+        "device": ARECORD_DEVICE or "default",
+        "last_error": "",
+        "transcript": "",
+        "reply": "",
+        "processing_seconds": 0.0,
+        "thinking_seconds": 0.0,
+    },
     "voice": {
         "enabled": os.environ.get("VOLPE_VOICE_ENABLED", "1") != "0" and bool(PERSONALITY.get("speech", {}).get("enabled", True)),
         "status": "idle",
@@ -213,6 +262,29 @@ STATE = {
 }
 
 
+def talk_has_priority():
+    """Return True while a user conversation must own the speaker."""
+    now = time.time()
+
+    talk = STATE.get("talk", {})
+    status = str(talk.get("status") or "").lower()
+
+    active_states = {
+        "listening",
+        "recorded",
+        "processing",
+        "transcribed",
+        "thinking",
+        "ready_to_speak",
+        "responding",
+    }
+
+    if status in active_states:
+        return True
+
+    return now < TALK_PRIORITY_UNTIL
+
+
 class VolpeHandler(BaseHTTPRequestHandler):
     server_version = "VolpEBrain/0.1"
 
@@ -239,6 +311,63 @@ class VolpeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/camera/frame":
+            image = self.capture_frame()
+            if image is None:
+                self.send_error(503, "Camera frame unavailable")
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Content-Length", str(len(image)))
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(image)
+            return
+
+        if parsed.path == "/api/camera/stream":
+            self.send_response(200)
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_cors_headers()
+            self.end_headers()
+
+            try:
+                while True:
+                    image = self.capture_frame()
+                    if image is not None:
+                        self.wfile.write(b"--frame\r\n")
+                        self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                        self.wfile.write(
+                            f"Content-Length: {len(image)}\r\n\r\n".encode("ascii")
+                        )
+                        self.wfile.write(image)
+                        self.wfile.write(b"\r\n")
+                        self.wfile.flush()
+                    time.sleep(0.5)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
+        if parsed.path == "/api/status":
+            self.update_external_brain_status()
+            self.send_json({
+                "ok": True,
+                "service": "volp-e",
+                "pi": "online",
+                "arduino": STATE.get("arduino", "not_configured"),
+                "camera": STATE.get("camera", "unknown"),
+                "desktop_brain": STATE.get("external_brain", {}).get("status", "unknown"),
+                "coral": "unknown",
+                "uptime_seconds": round(time.time() - STARTED_AT, 1),
+            })
+            return
+
+        if parsed.path == "/api/system":
+            self.send_json(self.get_system_status())
+            return
+
         if parsed.path == "/api/state":
             self.update_standby()
             self.update_external_brain_status()
@@ -261,6 +390,39 @@ class VolpeHandler(BaseHTTPRequestHandler):
             self.send_json(result, 200 if result.get("ok") else 503)
             return
 
+        if parsed.path == "/api/talk/status":
+            self.send_json({
+                "ok": True,
+                "talk": STATE["talk"],
+            })
+            return
+
+        if parsed.path == "/api/talk/start":
+            result = self.start_talk_recording()
+            self.send_json(result, 200 if result.get("ok") else 503)
+            return
+
+        if parsed.path == "/api/talk/stop":
+            result = self.stop_talk_recording()
+            self.send_json(result, 200 if result.get("ok") else 503)
+            return
+
+        if parsed.path == "/api/talk/process":
+            result = self.process_talk_recording()
+            self.send_json(
+                result,
+                200 if result.get("ok") else 503
+            )
+            return
+
+        if parsed.path == "/api/talk/think":
+            result = self.think_talk_response()
+            self.send_json(
+                result,
+                200 if result.get("ok") else 503
+            )
+            return
+
         if parsed.path == "/api/say":
             query = parse_qs(parsed.query)
             text = query.get("text", [""])[0]
@@ -270,6 +432,18 @@ class VolpeHandler(BaseHTTPRequestHandler):
             force = query.get("force", ["0"])[0] == "1"
             sync = query.get("sync", ["0"])[0] == "1"
             if sync:
+                global TALK_PRIORITY_UNTIL
+
+                # Reserve the speaker before generating/playing
+                # a manual response. This prevents autonomous
+                # speech from starting concurrently.
+                TALK_PRIORITY_UNTIL = max(
+                    TALK_PRIORITY_UNTIL,
+                    time.time() + 120.0
+                )
+
+                STATE["talk"]["status"] = "responding"
+
                 spoken_text = self.prepare_speech_text(text)
                 if not spoken_text:
                     self.send_json({"ok": False, "error": "empty prepared text"}, 400)
@@ -277,6 +451,16 @@ class VolpeHandler(BaseHTTPRequestHandler):
                 STATE["voice"]["last_at"] = time.time()
                 STATE["voice"]["last_text"] = spoken_text
                 self.speak_text(spoken_text)
+
+                # Conversation finished. Autonomous speech stays
+                # silent for a short period so Volp-E does not
+                # immediately interrupt the user.
+                TALK_PRIORITY_UNTIL = (
+                    time.time()
+                    + TALK_PRIORITY_COOLDOWN_SECONDS
+                )
+
+                STATE["talk"]["status"] = "idle"
             else:
                 self.maybe_speak(text, force=force)
             self.send_json({"ok": True, "voice": STATE["voice"]})
@@ -351,6 +535,379 @@ class VolpeHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_cors_headers()
         self.end_headers()
+
+    @classmethod
+    def think_talk_response(cls):
+        transcript = str(
+            STATE["talk"].get(
+                "transcript",
+                ""
+            )
+        ).strip()
+
+        if not transcript:
+            return {
+                "ok": False,
+                "error": "No transcript available",
+                "talk": STATE["talk"],
+            }
+
+        if not EXTERNAL_BRAIN_URL:
+            return {
+                "ok": False,
+                "error": "External brain not configured",
+                "talk": STATE["talk"],
+            }
+
+        try:
+            STATE["talk"]["status"] = "thinking"
+            STATE["talk"]["last_error"] = ""
+
+            payload = {
+                "source": "volp-e",
+                "text": transcript,
+            }
+
+            request = Request(
+                f"{EXTERNAL_BRAIN_URL}/chat",
+                data=json.dumps(
+                    payload
+                ).encode("utf-8"),
+                headers={
+                    "Content-Type":
+                        "application/json"
+                },
+                method="POST",
+            )
+
+            started = time.time()
+
+            with urlopen(
+                request,
+                timeout=90.0
+            ) as response:
+                result = json.loads(
+                    response.read().decode(
+                        "utf-8"
+                    )
+                )
+
+            reply = str(
+                result.get("text") or ""
+            ).strip()
+
+            if not reply:
+                raise RuntimeError(
+                    "Desktop Brain returned "
+                    "an empty response"
+                )
+
+            STATE["talk"].update({
+                "status": "ready_to_speak",
+                "reply": reply,
+                "thinking_seconds": round(
+                    time.time() - started,
+                    2
+                ),
+                "last_error": "",
+            })
+
+            return {
+                "ok": True,
+                "talk": STATE["talk"],
+                "conversation": result,
+            }
+
+        except Exception as exc:
+            STATE["talk"]["status"] = "error"
+            STATE["talk"]["last_error"] = str(exc)
+
+            return {
+                "ok": False,
+                "error": str(exc),
+                "talk": STATE["talk"],
+            }
+
+
+    @classmethod
+    def process_talk_recording(cls):
+        if not TALK_WAV_PATH.exists():
+            return {
+                "ok": False,
+                "error": "No recorded audio available",
+                "talk": STATE["talk"],
+            }
+
+        if not EXTERNAL_BRAIN_URL:
+            return {
+                "ok": False,
+                "error": "External brain not configured",
+                "talk": STATE["talk"],
+            }
+
+        try:
+            STATE["talk"]["status"] = "processing"
+            STATE["talk"]["last_error"] = ""
+
+            # Light speech preprocessing before STT.
+            # Keeps the original capture untouched and creates a cleaned WAV.
+            processed_path = Path("/tmp/volpe-talk-stt.wav")
+
+            try:
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-loglevel", "error",
+                        "-i", str(TALK_WAV_PATH),
+                        "-af",
+                        "highpass=f=90,lowpass=f=7600,"
+                        "afftdn=nf=-28,"
+                        "dynaudnorm=f=150:g=7:p=0.9",
+                        "-ar", "16000",
+                        "-ac", "1",
+                        "-c:a", "pcm_s16le",
+                        str(processed_path),
+                    ],
+                    check=True,
+                    timeout=15,
+                )
+
+                audio_path = (
+                    processed_path
+                    if processed_path.exists()
+                    and processed_path.stat().st_size > 44
+                    else TALK_WAV_PATH
+                )
+
+            except Exception as exc:
+                print(
+                    f"[Volp-E STT] Audio preprocessing skipped: {exc}",
+                    flush=True
+                )
+                audio_path = TALK_WAV_PATH
+
+            audio = audio_path.read_bytes()
+
+            payload = {
+                "source": "volp-e",
+                "audio_format": "wav",
+                "audio_b64": base64.b64encode(
+                    audio
+                ).decode("ascii"),
+            }
+
+            request = Request(
+                f"{EXTERNAL_BRAIN_URL}/transcribe",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json"
+                },
+                method="POST",
+            )
+
+            started = time.time()
+
+            with urlopen(
+                request,
+                timeout=90.0
+            ) as response:
+                result = json.loads(
+                    response.read().decode("utf-8")
+                )
+
+            transcript = str(
+                result.get("text") or ""
+            ).strip()
+
+            STATE["talk"].update({
+                "status": "transcribed",
+                "transcript": transcript,
+                "processing_seconds": round(
+                    time.time() - started,
+                    2
+                ),
+                "last_error": "",
+            })
+
+            return {
+                "ok": True,
+                "talk": STATE["talk"],
+                "transcription": result,
+            }
+
+        except Exception as exc:
+            STATE["talk"]["status"] = "error"
+            STATE["talk"]["last_error"] = str(exc)
+
+            return {
+                "ok": False,
+                "error": str(exc),
+                "talk": STATE["talk"],
+            }
+
+
+    @classmethod
+    def start_talk_recording(cls):
+        global TALK_PROCESS
+
+        with TALK_LOCK:
+            if TALK_PROCESS is not None and TALK_PROCESS.poll() is None:
+                return {
+                    "ok": True,
+                    "already_recording": True,
+                    "talk": STATE["talk"],
+                }
+
+            try:
+                try:
+                    TALK_WAV_PATH.unlink()
+                except FileNotFoundError:
+                    pass
+
+                command = ["arecord", "-q"]
+
+                if ARECORD_DEVICE:
+                    command += ["-D", ARECORD_DEVICE]
+
+                command += [
+                    "-f", "S16_LE",
+                    "-r", "16000",
+                    "-c", "1",
+                    "-t", "wav",
+                    str(TALK_WAV_PATH),
+                ]
+
+                TALK_PROCESS = subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+
+                # Give arecord a moment to fail if the capture device
+                # cannot be opened.
+                time.sleep(0.15)
+
+                if TALK_PROCESS.poll() is not None:
+                    error = ""
+                    if TALK_PROCESS.stderr:
+                        error = TALK_PROCESS.stderr.read().decode(
+                            "utf-8",
+                            errors="replace"
+                        ).strip()
+
+                    TALK_PROCESS = None
+
+                    STATE["talk"]["status"] = "error"
+                    STATE["talk"]["last_error"] = error or "arecord failed"
+
+                    return {
+                        "ok": False,
+                        "error": STATE["talk"]["last_error"],
+                        "talk": STATE["talk"],
+                    }
+
+                now = time.time()
+
+                STATE["talk"].update({
+                    "status": "listening",
+                    "started_at": now,
+                    "stopped_at": 0.0,
+                    "duration_seconds": 0.0,
+                    "audio_bytes": 0,
+                    "device": ARECORD_DEVICE or "default",
+                    "last_error": "",
+                })
+
+                return {
+                    "ok": True,
+                    "talk": STATE["talk"],
+                }
+
+            except Exception as exc:
+                TALK_PROCESS = None
+
+                STATE["talk"]["status"] = "error"
+                STATE["talk"]["last_error"] = str(exc)
+
+                return {
+                    "ok": False,
+                    "error": str(exc),
+                    "talk": STATE["talk"],
+                }
+
+    @classmethod
+    def stop_talk_recording(cls):
+        global TALK_PROCESS
+
+        with TALK_LOCK:
+            process = TALK_PROCESS
+
+            if process is None or process.poll() is not None:
+                TALK_PROCESS = None
+
+                if TALK_WAV_PATH.exists():
+                    STATE["talk"]["audio_bytes"] = TALK_WAV_PATH.stat().st_size
+
+                if STATE["talk"]["status"] == "listening":
+                    STATE["talk"]["status"] = "recorded"
+
+                return {
+                    "ok": True,
+                    "already_stopped": True,
+                    "talk": STATE["talk"],
+                }
+
+            try:
+                process.send_signal(signal.SIGINT)
+
+                try:
+                    process.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait(timeout=1.0)
+
+                TALK_PROCESS = None
+
+                now = time.time()
+
+                started = float(
+                    STATE["talk"].get("started_at") or now
+                )
+
+                size = (
+                    TALK_WAV_PATH.stat().st_size
+                    if TALK_WAV_PATH.exists()
+                    else 0
+                )
+
+                STATE["talk"].update({
+                    "status": "recorded" if size > 44 else "error",
+                    "stopped_at": now,
+                    "duration_seconds": round(
+                        max(0.0, now - started),
+                        2
+                    ),
+                    "audio_bytes": size,
+                    "last_error": "" if size > 44 else "Recorded WAV is empty",
+                })
+
+                return {
+                    "ok": size > 44,
+                    "talk": STATE["talk"],
+                }
+
+            except Exception as exc:
+                TALK_PROCESS = None
+
+                STATE["talk"]["status"] = "error"
+                STATE["talk"]["last_error"] = str(exc)
+
+                return {
+                    "ok": False,
+                    "error": str(exc),
+                    "talk": STATE["talk"],
+                }
 
     @classmethod
     def remember(cls, kind, description, **details):
@@ -595,6 +1152,11 @@ class VolpeHandler(BaseHTTPRequestHandler):
 
     @classmethod
     def maybe_speak(cls, text, force=False):
+        # TALK PRIORITY: block autonomous speech
+        # while a user conversation is active or cooling down.
+        if talk_has_priority():
+            return False
+
         voice = STATE["voice"]
         if not voice.get("enabled"):
             return
@@ -821,6 +1383,66 @@ class VolpeHandler(BaseHTTPRequestHandler):
         elif STATE["mode"] in {"sleepy", "standby"}:
             STATE["mode"] = "normal"
 
+    @staticmethod
+    def get_system_status():
+        cpu_temp = None
+        try:
+            with open("/sys/class/thermal/thermal_zone0/temp", "r", encoding="utf-8") as handle:
+                cpu_temp = round(float(handle.read().strip()) / 1000.0, 1)
+        except Exception:
+            pass
+
+        memory_total = None
+        memory_available = None
+        memory_usage = None
+
+        try:
+            values = {}
+            with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+                for line in handle:
+                    key, value = line.split(":", 1)
+                    values[key] = int(value.strip().split()[0])
+
+            memory_total = values.get("MemTotal")
+            memory_available = values.get("MemAvailable")
+
+            if memory_total and memory_available is not None:
+                memory_usage = round(
+                    100.0 * (memory_total - memory_available) / memory_total,
+                    1
+                )
+        except Exception:
+            pass
+
+        disk = shutil.disk_usage("/")
+
+        load_1m = None
+        try:
+            load_1m = round(os.getloadavg()[0], 2)
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "cpu": {
+                "temperature_c": cpu_temp,
+                "load_1m": load_1m,
+            },
+            "memory": {
+                "usage_percent": memory_usage,
+                "total_mb": round(memory_total / 1024, 1) if memory_total else None,
+                "available_mb": round(memory_available / 1024, 1) if memory_available else None,
+            },
+            "disk": {
+                "usage_percent": round(
+                    100.0 * (disk.total - disk.free) / disk.total,
+                    1
+                ),
+                "free_gb": round(disk.free / (1024 ** 3), 2),
+            },
+            "uptime_seconds": round(time.time() - STARTED_AT, 1),
+        }
+
     def serve_static(self, request_path, head_only=False):
         relative = request_path.lstrip("/") or "index.html"
         target = (FACE_DIR / relative).resolve()
@@ -840,8 +1462,8 @@ class VolpeHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    address = ("127.0.0.1", 8765)
-    print(f"Volp-E brain listening on http://{address[0]}:{address[1]}")
+    address = (CONTROL_HOST, CONTROL_PORT)
+    print(f"Volp-E brain listening on http://{address[0]}:{address[1]}", flush=True)
     ThreadingHTTPServer(address, VolpeHandler).serve_forever()
 
 

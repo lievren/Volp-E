@@ -9,15 +9,68 @@ import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 
 HOST = "0.0.0.0"
 PORT = 8787
+
+OLLAMA_URL = os.environ.get(
+    "VOLPE_OLLAMA_URL",
+    "http://127.0.0.1:11434/api/chat"
+)
+
+OLLAMA_MODEL = os.environ.get(
+    "VOLPE_OLLAMA_MODEL",
+    "qwen3:1.7b"
+)
+
+CHAT_HISTORY = []
+CHAT_HISTORY_MAX_MESSAGES = 12
+
+VOLPE_SYSTEM_PROMPT = """
+Tu es Volp-E, un petit robot compagnon physique.
+
+Tu parles toujours en fran?ais.
+Ton nom s'?crit Volp-E et se prononce Volpi.
+
+Personnalit?:
+- curieux
+- chaleureux
+- l?g?rement joueur
+- naturel
+- attachant
+- jamais excessivement bavard
+
+R?gles de conversation:
+- r?ponds g?n?ralement en une ? trois phrases courtes
+- ?vite les longs paragraphes
+- parle comme un compagnon, pas comme un assistant informatique
+- ne commence pas chaque r?ponse par "Bien s?r"
+- ne mentionne pas que tu es un mod?le de langage
+- si la transcription semble incompr?hensible, demande simplement
+  ? ton interlocuteur de r?p?ter
+- n'invente pas avoir effectu? une action physique que tu n'as
+  pas r?ellement effectu?e
+""".strip()
 ROOT = Path(__file__).resolve().parent
 LATEST_IMAGE = ROOT / "latest_scene.jpg"
 LATEST_JSON = ROOT / "latest_scene.json"
 PHRASES_JSON = ROOT / "phrases.json"
 LATEST_SPEECH = ROOT / "latest_speech.wav"
+LATEST_TALK = ROOT / "latest_talk.wav"
+
+WHISPER_MODEL_NAME = os.environ.get(
+    "VOLPE_WHISPER_MODEL",
+    "base"
+)
+
+WHISPER_LANGUAGE = os.environ.get(
+    "VOLPE_WHISPER_LANGUAGE",
+    "fr"
+)
+
+WHISPER_MODEL = None
 PERSONALITY_FILE = Path(os.environ.get("VOLPE_PERSONALITY_FILE", ROOT.parent / "config" / "personality.json"))
 PIPER_EXE = Path(os.environ.get("VOLPE_PIPER_EXE", ROOT / "piper" / "piper.exe"))
 PIPER_MODEL = Path(os.environ.get("VOLPE_PIPER_MODEL", ROOT / "voices" / "fr_FR-siwis-medium.onnx"))
@@ -310,6 +363,142 @@ def describe_face(distance_text, horizontal, vertical):
     )
 
 
+def get_whisper_model():
+    global WHISPER_MODEL
+
+    if WHISPER_MODEL is None:
+        print(
+            f"[Volp-E STT] Loading Faster-Whisper: "
+            f"{WHISPER_MODEL_NAME}",
+            flush=True
+        )
+
+        from faster_whisper import WhisperModel
+
+        WHISPER_MODEL = WhisperModel(
+            WHISPER_MODEL_NAME,
+            device="cpu",
+            compute_type="int8"
+        )
+
+        print(
+            "[Volp-E STT] Whisper ready",
+            flush=True
+        )
+
+    return WHISPER_MODEL
+
+
+def transcribe_audio(path):
+    model = get_whisper_model()
+
+    segments, info = model.transcribe(
+        str(path),
+        language=WHISPER_LANGUAGE,
+        beam_size=5,
+        vad_filter=True,
+    )
+
+    parts = []
+
+    for segment in segments:
+        value = str(segment.text or "").strip()
+
+        if value:
+            parts.append(value)
+
+    return " ".join(parts).strip()
+
+
+def chat_with_ollama(user_text):
+    user_text = str(user_text or "").strip()
+
+    if not user_text:
+        raise ValueError("empty user text")
+
+    messages = [
+        {
+            "role": "system",
+            "content": VOLPE_SYSTEM_PROMPT,
+        }
+    ]
+
+    messages.extend(CHAT_HISTORY)
+
+    messages.append({
+        "role": "user",
+        "content": user_text,
+    })
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "stream": False,
+        "think": False,
+        "options": {
+            "temperature": 0.7,
+            "num_predict": 120,
+        },
+    }
+
+    request = Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    started = time.time()
+
+    with urlopen(
+        request,
+        timeout=90.0
+    ) as response:
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+    answer = str(
+        result.get("message", {}).get(
+            "content",
+            ""
+        )
+    ).strip()
+
+    if not answer:
+        raise RuntimeError(
+            "Ollama returned an empty answer"
+        )
+
+    CHAT_HISTORY.extend([
+        {
+            "role": "user",
+            "content": user_text,
+        },
+        {
+            "role": "assistant",
+            "content": answer,
+        },
+    ])
+
+    if len(CHAT_HISTORY) > CHAT_HISTORY_MAX_MESSAGES:
+        del CHAT_HISTORY[
+            :-CHAT_HISTORY_MAX_MESSAGES
+        ]
+
+    return {
+        "text": answer,
+        "model": OLLAMA_MODEL,
+        "processing_seconds": round(
+            time.time() - started,
+            2
+        ),
+        "history_messages": len(CHAT_HISTORY),
+    }
+
+
 class DesktopBrainHandler(BaseHTTPRequestHandler):
     server_version = "VolpEDesktopBrain/0.1"
 
@@ -345,6 +534,12 @@ class DesktopBrainHandler(BaseHTTPRequestHandler):
         if self.path != "/analyze":
             if self.path == "/speak":
                 self.handle_speak()
+                return
+            if self.path == "/transcribe":
+                self.handle_transcribe()
+                return
+            if self.path == "/chat":
+                self.handle_chat()
                 return
             self.send_error(404)
             return
@@ -389,6 +584,104 @@ class DesktopBrainHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             STATE["last_error"] = str(exc)
             self.send_json({"ok": False, "error": str(exc)}, 400)
+
+    def handle_chat(self):
+        try:
+            length = int(
+                self.headers.get(
+                    "Content-Length",
+                    "0"
+                )
+            )
+
+            payload = json.loads(
+                self.rfile.read(length).decode(
+                    "utf-8"
+                )
+            )
+
+            user_text = str(
+                payload.get("text") or ""
+            ).strip()
+
+            if not user_text:
+                raise ValueError("missing text")
+
+            result = chat_with_ollama(
+                user_text
+            )
+
+            self.send_json({
+                "ok": True,
+                "kind": "conversation_response",
+                "text": result["text"],
+                "model": result["model"],
+                "processing_seconds":
+                    result["processing_seconds"],
+                "history_messages":
+                    result["history_messages"],
+            })
+
+        except Exception as exc:
+            STATE["last_error"] = str(exc)
+
+            self.send_json({
+                "ok": False,
+                "error": str(exc)
+            }, 400)
+
+
+    def handle_transcribe(self):
+        try:
+            length = int(
+                self.headers.get(
+                    "Content-Length",
+                    "0"
+                )
+            )
+
+            payload = json.loads(
+                self.rfile.read(length).decode("utf-8")
+            )
+
+            audio = base64.b64decode(
+                payload.get("audio_b64", ""),
+                validate=True
+            )
+
+            if not audio:
+                raise ValueError("missing audio_b64")
+
+            LATEST_TALK.write_bytes(audio)
+
+            started = time.time()
+
+            transcript = transcribe_audio(
+                LATEST_TALK
+            )
+
+            elapsed = round(
+                time.time() - started,
+                2
+            )
+
+            self.send_json({
+                "ok": True,
+                "kind": "speech_transcription",
+                "text": transcript,
+                "language": WHISPER_LANGUAGE,
+                "model": WHISPER_MODEL_NAME,
+                "audio_bytes": len(audio),
+                "processing_seconds": elapsed,
+            })
+
+        except Exception as exc:
+            STATE["last_error"] = str(exc)
+
+            self.send_json({
+                "ok": False,
+                "error": str(exc)
+            }, 400)
 
     def handle_speak(self):
         try:

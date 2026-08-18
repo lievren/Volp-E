@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#05070d">
+<title>Volp-E // Voice Control</title>
+
+<style>
+:root{
+  --bg:#05070d;
+  --panel:rgba(10,18,32,.88);
+  --cyan:#31f5ff;
+  --pink:#ff3bd4;
+  --green:#4dff9b;
+  --orange:#ffb347;
+  --red:#ff5f77;
+  --text:#ecfaff;
+  --muted:#7892a8;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:Arial,sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 10% 0%,rgba(255,59,212,.14),transparent 30%),
+    radial-gradient(circle at 100% 15%,rgba(49,245,255,.12),transparent 28%),
+    #05070d;
+}
+
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(49,245,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(49,245,255,.035) 1px,transparent 1px);
+  background-size:28px 28px;
+}
+
+.app{
+  width:min(94vw,620px);
+  margin:0 auto;
+  padding:20px 0 38px;
+}
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:18px;
+}
+
+.back{
+  color:var(--cyan);
+  text-decoration:none;
+  border:1px solid rgba(49,245,255,.25);
+  background:rgba(49,245,255,.05);
+  border-radius:12px;
+  padding:10px 13px;
+}
+
+.title{
+  text-align:right;
+}
+
+.title strong{
+  display:block;
+  color:var(--pink);
+  letter-spacing:2px;
+}
+
+.title small{
+  color:var(--muted);
+}
+
+.panel{
+  position:relative;
+  margin-bottom:16px;
+  padding:18px;
+  border:1px solid rgba(49,245,255,.16);
+  border-radius:18px;
+  background:var(--panel);
+  box-shadow:0 0 30px rgba(49,245,255,.06);
+  overflow:hidden;
+}
+
+.section{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:14px;
+  color:var(--cyan);
+  font-size:12px;
+  letter-spacing:1.7px;
+}
+
+.section:after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:linear-gradient(90deg,var(--cyan),transparent);
+}
+
+.terminal{
+  position:relative;
+  border:1px solid rgba(255,59,212,.25);
+  background:#04070d;
+  border-radius:14px;
+  overflow:hidden;
+}
+
+textarea{
+  display:block;
+  width:100%;
+  min-height:150px;
+  resize:vertical;
+  outline:none;
+  border:0;
+  padding:18px;
+  background:transparent;
+  color:#f1fbff;
+  caret-color:var(--pink);
+  font:16px Consolas,monospace;
+}
+
+textarea::placeholder{
+  color:#52687b;
+}
+
+.counter{
+  padding:0 14px 10px;
+  text-align:right;
+  color:var(--muted);
+  font:11px Consolas,monospace;
+}
+
+.transmit{
+  width:100%;
+  margin-top:14px;
+  padding:15px;
+  border:0;
+  border-radius:13px;
+  cursor:pointer;
+  font-weight:bold;
+  letter-spacing:1.5px;
+  color:#071018;
+  background:linear-gradient(90deg,var(--pink),var(--cyan));
+  box-shadow:
+    0 0 18px rgba(255,59,212,.14),
+    0 0 22px rgba(49,245,255,.10);
+}
+
+.transmit:disabled{
+  opacity:.45;
+}
+
+.status{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-top:14px;
+  padding:11px 13px;
+  border-radius:11px;
+  background:rgba(255,255,255,.025);
+  color:var(--muted);
+  font:12px Consolas,monospace;
+}
+
+.dot{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 10px currentColor;
+}
+
+.ready{color:var(--green)}
+.busy{color:var(--orange)}
+.error{color:var(--red)}
+
+.quick-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.quick{
+  min-height:52px;
+  padding:10px;
+  border-radius:11px;
+  border:1px solid rgba(49,245,255,.15);
+  color:var(--cyan);
+  background:rgba(49,245,255,.035);
+  cursor:pointer;
+  font-size:12px;
+}
+
+.quick:active{
+  transform:scale(.98);
+}
+
+.log{
+  min-height:80px;
+  max-height:220px;
+  overflow:auto;
+  font:12px Consolas,monospace;
+}
+
+.log-entry{
+  padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+
+.time{color:var(--pink)}
+.sent{color:var(--green)}
+.text{color:#a9c0d2;margin-top:4px}
+
+.wave{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:70px;
+  gap:5px;
+}
+
+.bar{
+  width:4px;
+  height:14px;
+  border-radius:4px;
+  background:var(--cyan);
+  box-shadow:0 0 8px var(--cyan);
+}
+
+.speaking .bar{
+  animation:pulse .7s ease-in-out infinite alternate;
+}
+
+.bar:nth-child(2){animation-delay:.1s}
+.bar:nth-child(3){animation-delay:.2s}
+.bar:nth-child(4){animation-delay:.3s}
+.bar:nth-child(5){animation-delay:.4s}
+.bar:nth-child(6){animation-delay:.25s}
+.bar:nth-child(7){animation-delay:.15s}
+
+@keyframes pulse{
+  from{height:8px}
+  to{height:48px}
+}
+</style>
+
+<style id="v04-voice-compact">
+html,body{
+  margin:0 !important;
+  width:100% !important;
+  height:100% !important;
+  overflow:hidden !important;
+}
+
+.app{
+  width:min(94vw,620px) !important;
+  height:100dvh !important;
+  margin:0 auto !important;
+  padding:10px 0 !important;
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto auto !important;
+  gap:8px !important;
+}
+
+.top{
+  margin-bottom:0 !important;
+}
+
+.panel{
+  margin-bottom:0 !important;
+  padding:12px !important;
+}
+
+.wave{
+  height:42px !important;
+}
+
+textarea{
+  min-height:85px !important;
+  height:85px !important;
+  padding:12px !important;
+  font-size:14px !important;
+}
+
+.transmit{
+  margin-top:10px !important;
+  padding:12px !important;
+}
+
+.quick-grid{
+  gap:6px !important;
+}
+
+.quick{
+  min-height:40px !important;
+  padding:7px !important;
+  font-size:10px !important;
+}
+
+.log{
+  min-height:45px !important;
+  max-height:70px !important;
+}
+
+@media(max-height:700px){
+  .app{
+    padding:6px 0 !important;
+    gap:5px !important;
+  }
+
+  .panel{
+    padding:8px 10px !important;
+  }
+
+  .section{
+    margin-bottom:8px !important;
+    font-size:9px !important;
+  }
+
+  .wave{
+    height:30px !important;
+  }
+
+  textarea{
+    min-height:65px !important;
+    height:65px !important;
+    font-size:12px !important;
+  }
+
+  .transmit{
+    padding:9px !important;
+    font-size:11px !important;
+  }
+
+  .quick{
+    min-height:32px !important;
+    font-size:9px !important;
+  }
+
+  .status{
+    margin-top:8px !important;
+    padding:7px 9px !important;
+    font-size:10px !important;
+  }
+
+  .log{
+    max-height:48px !important;
+    font-size:10px !important;
+  }
+}
+</style>
+
+</head>
+
+<body>
+<div class="app">
+
+  <div class="top">
+    <a class="back" href="/">‹ CORE</a>
+
+    <div class="title">
+      <strong>VOICE CONTROL</strong>
+      <small>VOLP-E // COM-LINK</small>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section">VOICE TRANSMISSION</div>
+
+    <div class="wave" id="wave">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </div>
+
+    <div class="terminal">
+      <textarea
+        id="speechText"
+        maxlength="500"
+        placeholder="> Entrez le texte à transmettre à Volp-E..."
+      ></textarea>
+
+      <div class="counter">
+        <span id="count">0</span> / 500
+      </div>
+    </div>
+
+    <button class="transmit" id="transmit" onclick="sendSpeech()">
+      TRANSMIT // SPEAK
+    </button>
+
+    <div class="status ready" id="status">
+      <span class="dot"></span>
+      COM-LINK READY
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section">QUICK COMMANDS</div>
+
+    <div class="quick-grid">
+      <button class="quick" onclick="quickSay('Salut ! Je suis Volp-E.')">
+        INITIALISATION
+      </button>
+
+      <button class="quick" onclick="quickSay('Bonjour ! Comment vas-tu ?')">
+        SALUTATION
+      </button>
+
+      <button class="quick" onclick="quickSay('Je reste attentif.')">
+        STATUS
+      </button>
+
+      <button class="quick" onclick="quickSay('À bientôt !')">
+        GOODBYE
+      </button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section">TRANSMISSION LOG</div>
+
+    <div class="log" id="log">
+      <div class="log-entry">
+        <div class="time">SYSTEM</div>
+        <div class="text">Canal vocal initialisé.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const input = document.getElementById("speechText");
+const count = document.getElementById("count");
+const button = document.getElementById("transmit");
+const statusBox = document.getElementById("status");
+const wave = document.getElementById("wave");
+
+input.addEventListener("input",()=>{
+  count.textContent=input.value.length;
+});
+
+input.addEventListener("keydown",e=>{
+  if(e.key==="Enter" && e.ctrlKey){
+    sendSpeech();
+  }
+});
+
+function setStatus(type,text){
+  statusBox.className="status "+type;
+  statusBox.innerHTML='<span class="dot"></span>'+text;
+}
+
+function addLog(text,ok=true){
+  const log=document.getElementById("log");
+
+  const entry=document.createElement("div");
+  entry.className="log-entry";
+
+  const now=new Date().toLocaleTimeString("fr-CH");
+
+  entry.innerHTML=
+    `<div class="time">${now}</div>
+     <div class="${ok ? "sent" : "error"}">
+       ${ok ? "TRANSMITTED" : "FAILED"}
+     </div>
+     <div class="text"></div>`;
+
+  entry.querySelector(".text").textContent=text;
+
+  log.prepend(entry);
+}
+
+async function transmit(text){
+  text=String(text||"").trim();
+
+  if(!text){
+    setStatus("error","EMPTY TRANSMISSION");
+    return;
+  }
+
+  button.disabled=true;
+  setStatus("busy","TRANSMITTING...");
+  wave.classList.add("speaking");
+
+  try{
+    const url=
+      "/api/say?force=1&sync=1&text="+
+      encodeURIComponent(text);
+
+    const response=await fetch(url);
+    const data=await response.json();
+
+    if(!response.ok || !data.ok){
+      throw new Error(data.error || "Voice transmission failed");
+    }
+
+    setStatus("ready","TRANSMISSION COMPLETE");
+    addLog(text,true);
+
+  }catch(error){
+    console.error(error);
+    setStatus("error","TRANSMISSION FAILED");
+    addLog(text,false);
+
+  }finally{
+    wave.classList.remove("speaking");
+    button.disabled=false;
+  }
+}
+
+function sendSpeech(){
+  transmit(input.value);
+}
+
+function quickSay(text){
+  input.value=text;
+  count.textContent=text.length;
+  transmit(text);
+}
+</script>
+
+</body>
+</html>

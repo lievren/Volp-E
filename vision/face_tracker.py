@@ -18,7 +18,7 @@ MIN_SCORE = 0.30
 PERSON_CLASS_ID = 0
 ROTATE_180 = True
 LATEST_FRAME = Path("/tmp/volpe-latest-frame.jpg")
-LATEST_FRAME_EVERY_SECONDS = 2.0
+LATEST_FRAME_EVERY_SECONDS = 0.5
 
 
 def normalize_frame(frame):

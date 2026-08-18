@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#05070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Volp-E">
+
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/volpe-192.png">
+<link rel="icon" href="/icons/volpe-192.png">
+
+<title>Volp-E Control</title>
+
+<style>
+:root{
+  --bg:#05070d;
+  --panel:rgba(10,18,32,.88);
+  --panel2:rgba(7,13,24,.92);
+  --cyan:#31f5ff;
+  --pink:#ff3bd4;
+  --green:#4dff9b;
+  --orange:#ffb347;
+  --yellow:#ffd84d;
+  --red:#ff5f77;
+  --text:#ecfaff;
+  --muted:#7892a8;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+
+body{
+  color:var(--text);
+  font-family:Arial,sans-serif;
+  background:
+    radial-gradient(circle at 5% 0%,rgba(255,59,212,.13),transparent 28%),
+    radial-gradient(circle at 100% 10%,rgba(49,245,255,.11),transparent 28%),
+    #05070d;
+}
+
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(49,245,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(49,245,255,.035) 1px,transparent 1px);
+  background-size:26px 26px;
+}
+
+.dashboard{
+  width:min(100%,760px);
+  height:100dvh;
+  margin:auto;
+  padding:10px;
+  display:grid;
+  grid-template-rows:
+    auto
+    minmax(0,1.05fr)
+    minmax(0,1.3fr)
+    auto;
+  gap:9px;
+}
+
+.panel{
+  position:relative;
+  min-height:0;
+  border:1px solid rgba(49,245,255,.16);
+  border-radius:15px;
+  background:var(--panel);
+  box-shadow:0 0 22px rgba(49,245,255,.045);
+  overflow:hidden;
+}
+
+/* HEADER */
+
+.header{
+  min-height:74px;
+  padding:9px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  min-width:0;
+  gap:10px;
+}
+
+.logo{
+  width:52px;
+  height:52px;
+  flex:0 0 auto;
+  border-radius:13px;
+  background:#fff;
+  padding:4px;
+  object-fit:contain;
+  box-shadow:
+    0 0 13px rgba(255,179,71,.15),
+    0 0 18px rgba(49,245,255,.08);
+}
+
+.brand-name{
+  font-size:20px;
+  font-weight:bold;
+  letter-spacing:1.5px;
+}
+
+.brand-sub{
+  margin-top:2px;
+  font-size:9px;
+  letter-spacing:1px;
+  color:var(--muted);
+}
+
+.online{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 9px;
+  border:1px solid rgba(77,255,155,.22);
+  border-radius:999px;
+  background:rgba(77,255,155,.04);
+  color:var(--green);
+  white-space:nowrap;
+  font:bold 10px Consolas,monospace;
+}
+
+.dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 8px currentColor;
+}
+
+/* STATUS GRID */
+
+.status-grid{
+  min-height:0;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:9px;
+}
+
+.status-panel{
+  padding:10px 11px;
+  overflow:hidden;
+}
+
+.title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:5px;
+  color:var(--cyan);
+  font-size:9px;
+  letter-spacing:1.35px;
+  text-transform:uppercase;
+}
+
+.title:after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:linear-gradient(90deg,var(--cyan),transparent);
+}
+
+.row{
+  min-height:23px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+  border-bottom:1px solid rgba(255,255,255,.04);
+}
+
+.row:last-child{
+  border:0;
+}
+
+.label{
+  color:var(--muted);
+  font-size:10px;
+}
+
+.value{
+  max-width:58%;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font:10px Consolas,monospace;
+  text-align:right;
+}
+
+.green{color:var(--green)}
+.cyan{color:var(--cyan)}
+.yellow{color:var(--yellow)}
+.red{color:var(--red)}
+
+/* CAMERA */
+
+.camera-panel{
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  min-height:0;
+  border-color:rgba(49,245,255,.25);
+}
+
+.camera-top{
+  padding:7px 10px 5px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font:9px Consolas,monospace;
+}
+
+.camera-title{
+  color:var(--cyan);
+  letter-spacing:1.2px;
+}
+
+.camera-rate{
+  color:var(--green);
+}
+
+.camera-box{
+  position:relative;
+  min-height:0;
+  overflow:hidden;
+  background:#000;
+}
+
+.camera-box img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.camera-box:before,
+.camera-box:after{
+  content:"";
+  position:absolute;
+  z-index:3;
+  width:26px;
+  height:26px;
+  pointer-events:none;
+}
+
+.camera-box:before{
+  left:7px;
+  top:7px;
+  border-left:2px solid var(--cyan);
+  border-top:2px solid var(--cyan);
+}
+
+.camera-box:after{
+  right:7px;
+  bottom:7px;
+  border-right:2px solid var(--pink);
+  border-bottom:2px solid var(--pink);
+}
+
+.scan{
+  position:absolute;
+  z-index:2;
+  left:0;
+  right:0;
+  top:0;
+  height:1px;
+  opacity:.4;
+  background:var(--cyan);
+  box-shadow:0 0 9px var(--cyan);
+  animation:scan 4s linear infinite;
+}
+
+@keyframes scan{
+  from{top:0}
+  to{top:100%}
+}
+
+.camera-bottom{
+  padding:5px 10px 6px;
+  display:flex;
+  justify-content:space-between;
+  color:var(--muted);
+  font:9px Consolas,monospace;
+}
+
+/* ACTIONS */
+
+.actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+}
+
+.action{
+  height:58px;
+  padding:9px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-radius:15px;
+  text-decoration:none;
+  color:var(--text);
+  background:var(--panel2);
+}
+
+.action-camera{
+  border:1px solid rgba(49,245,255,.28);
+}
+
+.action-voice{
+  border:1px solid rgba(255,59,212,.28);
+}
+
+.action strong{
+  display:block;
+  font-size:11px;
+  letter-spacing:1.1px;
+}
+
+.action-camera strong{
+  color:var(--cyan);
+}
+
+.action-voice strong{
+  color:var(--pink);
+}
+
+.action small{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:8px;
+}
+
+.arrow{
+  font-size:23px;
+}
+
+.action-camera .arrow{
+  color:var(--cyan);
+}
+
+.action-voice .arrow{
+  color:var(--pink);
+}
+
+/* SMALL PHONES */
+
+@media(max-height:700px){
+  .dashboard{
+    padding:7px;
+    gap:6px;
+  }
+
+  .header{
+    min-height:58px;
+    padding:6px 9px;
+  }
+
+  .logo{
+    width:43px;
+    height:43px;
+  }
+
+  .brand-name{
+    font-size:17px;
+  }
+
+  .brand-sub{
+    display:none;
+  }
+
+  .online{
+    font-size:8px;
+    padding:5px 7px;
+  }
+
+  .status-grid{
+    gap:6px;
+  }
+
+  .status-panel{
+    padding:7px 8px;
+  }
+
+  .row{
+    min-height:19px;
+  }
+
+  .label,.value{
+    font-size:8px;
+  }
+
+  .title{
+    font-size:8px;
+  }
+
+  .actions{
+    gap:6px;
+  }
+
+  .action{
+    height:48px;
+    padding:7px 9px;
+  }
+}
+</style>
+
+<style id="v04-force-three-actions">
+.actions{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:6px !important;
+}
+
+.action{
+  min-width:0 !important;
+}
+
+.action strong{
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+}
+
+@media(max-width:500px){
+  .actions{
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+
+  .action{
+    padding:7px 6px !important;
+  }
+
+  .action strong{
+    font-size:8px !important;
+    letter-spacing:.7px !important;
+  }
+
+  .action small{
+    font-size:7px !important;
+  }
+
+  .arrow{
+    font-size:16px !important;
+  }
+}
+</style>
+
+
+<style id="v04-fix-status-grid">
+.status-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:9px !important;
+}
+
+@media(max-width:500px){
+  .status-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="dashboard">
+
+  <!-- HEADER -->
+
+  <section class="panel header">
+
+    <div class="brand">
+      <img
+        class="logo"
+        src="/icons/volpe-192.png"
+        alt="Volp-E"
+      >
+
+      <div>
+        <div class="brand-name">VOLP-E</div>
+        <div class="brand-sub">
+          COMPANION CONTROL SYSTEM
+        </div>
+      </div>
+    </div>
+
+    <div class="online" id="heroStatus">
+      <span class="dot"></span>
+      CONNECTING
+    </div>
+
+  </section>
+
+
+  <!-- CORE + SYSTEM -->
+
+  <div class="status-grid">
+
+    <section class="panel status-panel">
+
+      <div class="title">
+        Core Status
+      </div>
+
+      <div class="row">
+        <span class="label">Pi</span>
+        <span class="value" id="pi">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Brain</span>
+        <span class="value" id="desktop_brain">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Camera</span>
+        <span class="value" id="camera">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Arduino</span>
+        <span class="value" id="arduino">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Coral</span>
+        <span class="value" id="coral">...</span>
+      </div>
+
+    </section>
+
+
+    <section class="panel status-panel">
+
+      <div class="title">
+        System Telemetry
+      </div>
+
+      <div class="row">
+        <span class="label">CPU</span>
+        <span class="value" id="cpu_temp">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Load</span>
+        <span class="value" id="cpu_load">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">RAM</span>
+        <span class="value" id="memory_usage">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Disk</span>
+        <span class="value" id="disk_usage">...</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Uptime</span>
+        <span class="value" id="uptime">...</span>
+      </div>
+
+    </section>
+
+  </div>
+
+
+  <!-- OPTICAL PREVIEW -->
+
+  <section class="panel camera-panel">
+
+    <div class="camera-top">
+      <span class="camera-title">
+        OPTICAL PREVIEW // CAM-01
+      </span>
+
+      <span class="camera-rate">
+        ● 15s
+      </span>
+    </div>
+
+    <div class="camera-box">
+      <div class="scan"></div>
+
+      <img
+        id="cameraSnapshot"
+        src="/api/camera/frame"
+        alt="Volp-E optical preview"
+      >
+    </div>
+
+    <div class="camera-bottom">
+      <span>OPTICAL SYSTEM READY</span>
+      <span id="cameraTime">--:--:--</span>
+    </div>
+
+  </section>
+
+
+  <!-- ACTIONS -->
+
+  <div class="actions">
+
+    <a
+      class="action action-camera"
+      href="/camera.html"
+    >
+      <div>
+        <strong>CAMERA</strong>
+        <small>LIVE OPTICAL FEED</small>
+      </div>
+
+      <span class="arrow">›</span>
+    </a>
+
+    <a
+      class="action action-voice"
+      href="/voice.html"
+    >
+      <div>
+        <strong>VOICE CONTROL</strong>
+        <small>COM-LINK // TTS</small>
+      </div>
+
+      <span class="arrow">›</span>
+    </a>
+
+    <a
+      class="action action-voice"
+      href="/talk.html"
+    >
+      <div>
+        <strong>TALK</strong>
+        <small>MIC // AUDIO-LINK</small>
+      </div>
+
+      <span class="arrow">›</span>
+    </a>
+
+  </div>
+
+</div>
+
+
+<script>
+function statusClass(value){
+  const v=String(value||"").toLowerCase();
+
+  if(v==="online") return "green";
+  if(v==="searching") return "cyan";
+  if(v==="offline" || v==="error") return "red";
+  return "yellow";
+}
+
+function setStatus(id,value){
+  const el=document.getElementById(id);
+
+  el.textContent=
+    String(value || "unknown").toUpperCase();
+
+  el.className=
+    "value "+statusClass(value);
+}
+
+function setText(id,value){
+  document.getElementById(id).textContent=value;
+}
+
+function formatUptime(seconds){
+  seconds=Math.round(Number(seconds||0));
+
+  const h=Math.floor(seconds/3600);
+  const m=Math.floor((seconds%3600)/60);
+
+  return `${h}h ${m}m`;
+}
+
+function refreshCamera(){
+  document.getElementById("cameraSnapshot").src=
+    "/api/camera/frame?t="+Date.now();
+
+  document.getElementById("cameraTime").textContent=
+    new Date().toLocaleTimeString("fr-CH");
+}
+
+async function refreshSystem(){
+  try{
+
+    const [statusRes,systemRes]=await Promise.all([
+      fetch("/api/status?t="+Date.now()),
+      fetch("/api/system?t="+Date.now())
+    ]);
+
+    const status=await statusRes.json();
+    const system=await systemRes.json();
+
+    setStatus("pi",status.pi);
+    setStatus("desktop_brain",status.desktop_brain);
+    setStatus("camera",status.camera);
+    setStatus("arduino",status.arduino);
+    setStatus("coral",status.coral);
+
+    const hero=
+      document.getElementById("heroStatus");
+
+    if(status.ok){
+      hero.className="online green";
+      hero.innerHTML=
+        '<span class="dot"></span>VOLP-E ONLINE';
+    }else{
+      hero.className="online red";
+      hero.innerHTML=
+        '<span class="dot"></span>OFFLINE';
+    }
+
+    setText(
+      "cpu_temp",
+      `${system.cpu.temperature_c ?? "--"}°C`
+    );
+
+    setText(
+      "cpu_load",
+      system.cpu.load_1m ?? "--"
+    );
+
+    setText(
+      "memory_usage",
+      `${system.memory.usage_percent ?? "--"}%`
+    );
+
+    setText(
+      "disk_usage",
+      `${system.disk.usage_percent ?? "--"}%`
+    );
+
+    setText(
+      "uptime",
+      formatUptime(system.uptime_seconds)
+    );
+
+  }catch(error){
+
+    console.error(error);
+
+    const hero=
+      document.getElementById("heroStatus");
+
+    hero.className="online red";
+    hero.innerHTML=
+      '<span class="dot"></span>LINK ERROR';
+  }
+}
+
+refreshSystem();
+refreshCamera();
+
+setInterval(refreshSystem,10000);
+setInterval(refreshCamera,15000);
+</script>
+
+</body>
+</html>

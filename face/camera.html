@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#05070d">
+<title>Volp-E // Camera</title>
+
+<style>
+:root{
+  --bg:#05070d;
+  --panel:#0b1220;
+  --cyan:#31f5ff;
+  --pink:#ff3bd4;
+  --green:#4dff9b;
+  --orange:#ffb347;
+  --text:#eafcff;
+  --muted:#7892a8;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 15% 0%,rgba(255,59,212,.14),transparent 30%),
+    radial-gradient(circle at 100% 20%,rgba(49,245,255,.12),transparent 28%),
+    #05070d;
+  color:var(--text);
+  font-family:Arial,sans-serif;
+}
+
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(49,245,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(49,245,255,.035) 1px,transparent 1px);
+  background-size:28px 28px;
+}
+
+.app{
+  width:min(94vw,720px);
+  margin:0 auto;
+  padding:20px 0 36px;
+}
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:18px;
+}
+
+.back{
+  text-decoration:none;
+  color:var(--cyan);
+  border:1px solid rgba(49,245,255,.25);
+  padding:10px 13px;
+  border-radius:12px;
+  background:rgba(49,245,255,.05);
+}
+
+.title{
+  text-align:right;
+}
+
+.title strong{
+  display:block;
+  color:var(--cyan);
+  letter-spacing:2px;
+}
+
+.title small{
+  color:var(--muted);
+}
+
+.camera{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  border:1px solid rgba(49,245,255,.35);
+  background:#000;
+  box-shadow:
+    0 0 30px rgba(49,245,255,.10),
+    0 0 60px rgba(255,59,212,.05);
+}
+
+.camera img{
+  width:100%;
+  display:block;
+  image-rendering:auto;
+}
+
+.camera:before,
+.camera:after{
+  content:"";
+  position:absolute;
+  width:42px;
+  height:42px;
+  z-index:2;
+  pointer-events:none;
+}
+
+.camera:before{
+  left:10px;
+  top:10px;
+  border-left:2px solid var(--cyan);
+  border-top:2px solid var(--cyan);
+}
+
+.camera:after{
+  right:10px;
+  bottom:10px;
+  border-right:2px solid var(--pink);
+  border-bottom:2px solid var(--pink);
+}
+
+.hud{
+  position:absolute;
+  top:12px;
+  right:14px;
+  z-index:3;
+  padding:6px 9px;
+  background:rgba(0,0,0,.60);
+  border:1px solid rgba(77,255,155,.35);
+  border-radius:8px;
+  color:var(--green);
+  font:12px Consolas,monospace;
+}
+
+.scan{
+  position:absolute;
+  left:0;
+  right:0;
+  height:2px;
+  top:0;
+  z-index:3;
+  opacity:.45;
+  background:var(--cyan);
+  box-shadow:0 0 12px var(--cyan);
+  animation:scan 4s linear infinite;
+  pointer-events:none;
+}
+
+@keyframes scan{
+  from{top:0}
+  to{top:100%}
+}
+
+.panel{
+  margin-top:16px;
+  padding:16px;
+  border:1px solid rgba(49,245,255,.14);
+  border-radius:16px;
+  background:rgba(11,18,32,.78);
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+
+.row:last-child{border:0}
+
+.label{color:var(--muted)}
+.value{font-family:Consolas,monospace}
+.green{color:var(--green)}
+.cyan{color:var(--cyan)}
+</style>
+
+<style id="v04-camera-compact">
+html,body{
+  margin:0 !important;
+  width:100% !important;
+  height:100% !important;
+  overflow:hidden !important;
+}
+
+.app{
+  width:min(94vw,720px) !important;
+  height:100dvh !important;
+  margin:0 auto !important;
+  padding:10px 0 !important;
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto !important;
+  gap:8px !important;
+}
+
+.top{
+  margin-bottom:0 !important;
+}
+
+.camera{
+  min-height:0 !important;
+}
+
+.camera img{
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+}
+
+.panel{
+  margin-top:0 !important;
+  padding:10px 14px !important;
+}
+
+.row{
+  padding:6px 0 !important;
+  font-size:12px !important;
+}
+
+@media(max-height:700px){
+  .app{
+    padding:7px 0 !important;
+    gap:6px !important;
+  }
+
+  .back{
+    padding:7px 10px !important;
+    font-size:12px !important;
+  }
+
+  .title strong{
+    font-size:12px !important;
+  }
+
+  .title small{
+    font-size:10px !important;
+  }
+
+  .panel{
+    padding:8px 12px !important;
+  }
+
+  .row{
+    padding:4px 0 !important;
+    font-size:10px !important;
+  }
+}
+</style>
+
+</head>
+
+<body>
+<div class="app">
+
+  <div class="top">
+    <a class="back" href="/">‹ CORE</a>
+
+    <div class="title">
+      <strong>OPTICAL FEED</strong>
+      <small>VOLP-E // CAM-01</small>
+    </div>
+  </div>
+
+  <div class="camera">
+    <div class="hud">● LIVE</div>
+    <div class="scan"></div>
+
+    <img
+      src="/api/camera/stream"
+      alt="Flux caméra Volp-E"
+    >
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <span class="label">Source</span>
+      <span class="value cyan">CAM-01</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Stream</span>
+      <span class="value green">ACTIVE</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Vision mode</span>
+      <span class="value" id="vision">...</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Last sync</span>
+      <span class="value" id="clock">--:--:--</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+async function updateState(){
+  try{
+    const r=await fetch('/api/status');
+    const d=await r.json();
+
+    document.getElementById('vision').textContent =
+      String(d.camera || 'unknown').toUpperCase();
+
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('fr-CH');
+  }catch(e){}
+}
+
+updateState();
+setInterval(updateState,5000);
+</script>
+
+</body>
+</html>

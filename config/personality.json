@@ -14,16 +14,31 @@
   },
   "speech": {
     "enabled": true,
-    "min_interval_seconds": 4.0,
-    "think_cooldown_seconds": 12.0,
+    "min_interval_seconds": 180,
+    "think_cooldown_seconds": 120,
     "voice_gain": 0.5,
     "prefix_chance": 0.18,
     "prefixes": {
-      "happy": ["Ah.", "Tiens."],
-      "curious": ["Hm.", "Interessant."],
-      "sleepy": ["Doucement.", "Tout bas."],
-      "searching": ["Attends.", "Je regarde."],
-      "attentive": ["Ok.", "Je te suis."]
+      "happy": [
+        "Ah.",
+        "Tiens."
+      ],
+      "curious": [
+        "Hm.",
+        "Interessant."
+      ],
+      "sleepy": [
+        "Doucement.",
+        "Tout bas."
+      ],
+      "searching": [
+        "Attends.",
+        "Je regarde."
+      ],
+      "attentive": [
+        "Ok.",
+        "Je te suis."
+      ]
     }
   },
   "memory": {
@@ -31,8 +46,8 @@
     "recent_seconds": 600,
     "standby_after_seconds": 300,
     "sleepy_after_seconds": 600,
-    "close_face_size": 0.70,
-    "presence_energy_gain": 0.10,
+    "close_face_size": 0.7,
+    "presence_energy_gain": 0.1,
     "presence_curiosity_gain": 0.12,
     "presence_familiarity_gain": 0.04,
     "presence_lost_curiosity_gain": 0.06,
@@ -41,11 +56,11 @@
     "standby_energy_loss": 0.08,
     "analysis_curiosity_gain": 0.03,
     "face_energy_gain_per_second": 0.055,
-    "face_curiosity_gain_per_second": 0.040,
-    "face_familiarity_gain_per_second": 0.010,
-    "standby_energy_loss_per_second": 0.030,
+    "face_curiosity_gain_per_second": 0.04,
+    "face_familiarity_gain_per_second": 0.01,
+    "standby_energy_loss_per_second": 0.03,
     "standby_curiosity_loss_per_second": 0.025,
-    "searching_energy_gain_per_second": 0.010,
+    "searching_energy_gain_per_second": 0.01,
     "searching_curiosity_gain_per_second": 0.012,
     "ambient_energy_loss_per_second": 0.018,
     "ambient_curiosity_loss_per_second": 0.016
